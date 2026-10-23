@@ -6,7 +6,7 @@ The interface between screens and the service layer/database. Most operations ar
 
 - All inputs are validated with Zod. Invalid input returns a typed error — never a 500 with a stack trace.
 - Every action returns `{ ok: true, data }` or `{ ok: false, error: { code, message } }` where `message` is plain language safe to show a user.
-- Error codes used across the API: `UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, VALIDATION, DUPLICATE_CHECKIN, QR_EXPIRED, QR_INVALID, MEMBERSHIP_EXPIRED, MEMBERSHIP_PAUSED, OUT_OF_STOCK, TRAINER_UNAVAILABLE, ALREADY_VERIFIED, INVALID_STATE`.
+- Error codes used across the API: `UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, VALIDATION, DUPLICATE_CHECKIN, QR_EXPIRED, QR_INVALID, MEMBERSHIP_EXPIRED, MEMBERSHIP_PAUSED, MEMBER_BLOCKED, MEMBER_CANCELLED, OUT_OF_STOCK, TRAINER_UNAVAILABLE, ALREADY_VERIFIED, INVALID_STATE`.
 - Amounts are integer rupees. Dates sent to the client are ISO strings; all display formatting is client-side in Asia/Kolkata.
 - Every mutating action writes an `audit_logs` row where `SECURITY.md` requires it.
 
@@ -29,7 +29,7 @@ Runs the daily scan (Red List) and builds renewal reminder + follow-ups-due list
 | Action | Input | Returns / rules |
 |---|---|---|
 | `memberLogin` | phone, pin | Session scoped to the member. Generic failure message (never reveals whether the phone exists). |
-| `checkIn` | qr token | Runs the full gate flow (`ARCHITECTURE.md` 3.1). Possible results: success (+ weekly goal), or `DUPLICATE_CHECKIN / QR_EXPIRED / QR_INVALID / MEMBERSHIP_EXPIRED / MEMBERSHIP_PAUSED`. |
+| `checkIn` | qr token | Runs the full gate flow (`ARCHITECTURE.md` 3.1). Possible results: success (+ weekly goal), or `DUPLICATE_CHECKIN / QR_EXPIRED / QR_INVALID / MEMBERSHIP_EXPIRED / MEMBERSHIP_PAUSED / MEMBER_BLOCKED / MEMBER_CANCELLED`. Member status is checked before the membership row. QR and assisted check-in both run the `check_in()` database function (migration 007): one transaction under a per-member advisory lock, so two quick scans can never both pass the duplicate guard. |
 | `getMyHome` | — | Plan, expiry, weekly goal (completed/target), open renewal prompt if within the reminder window. |
 | `getMyAttendance` | page | Own attendance history, newest first. |
 | `createRenewalOrder` | plan_id | Creates renewal order + payment in `Pending`; returns order, final payable amount, UPI instructions. |

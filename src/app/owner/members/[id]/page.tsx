@@ -65,7 +65,7 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
         </dl>
       </section>
 
-      <RecentVisits visits={detail.recentVisits} lastVisit={detail.lastVisit} />
+      <RecentVisits memberId={member.id} visits={detail.recentVisits} lastVisit={detail.lastVisit} />
       <MembershipHistory history={detail.history} />
     </div>
   );

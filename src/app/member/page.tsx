@@ -1,4 +1,5 @@
-import { CalendarClock, IdCard } from "lucide-react";
+import Link from "next/link";
+import { CalendarClock, IdCard, ScanLine } from "lucide-react";
 import { requireMember } from "@/services/auth";
 import { getMemberHome } from "@/services/members";
 import { daysUntilKolkata, formatDisplayDate } from "@/utils/dates";
@@ -7,7 +8,7 @@ import { StatusBadge } from "@/components/status-badge";
 
 /**
  * Member home — the member's real current plan and exact expiry date.
- * Weekly goal arrives in Phase 8; check-in and renew links appear with their screens.
+ * Weekly goal arrives in Phase 8; the renew link appears with its screen.
  */
 export default async function MemberHomePage() {
   const { memberId } = await requireMember();
@@ -61,6 +62,10 @@ export default async function MemberHomePage() {
         </div>
       </div>
       <p className="text-xs text-muted mt-3">Started {formatDisplayDate(membership.start_date)}. Only you can see this.</p>
+
+      <Link href="/member/check-in" className="btn-primary mt-6 flex w-full items-center justify-center gap-2">
+        <ScanLine className="h-5 w-5" aria-hidden /> Check in
+      </Link>
     </div>
   );
 }

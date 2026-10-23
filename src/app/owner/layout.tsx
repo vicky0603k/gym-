@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { LayoutDashboard, Tags, Users } from "lucide-react";
+import { LayoutDashboard, QrCode, Tags, UserCheck, Users } from "lucide-react";
 import { getCurrentStaff } from "@/services/auth";
 import { LogoutButton } from "@/components/logout-button";
 import { NavLink } from "@/components/nav-link";
@@ -7,11 +7,14 @@ import { NavLink } from "@/components/nav-link";
 /**
  * Owner layout — mobile: bottom bar; desktop: side bar (expanded).
  * A section is listed only once its screen exists (Red List, Renewals, Add-ons, Settings come later).
+ * Gate QR opens full screen over this layout.
  */
 
 const navItems = [
   { href: "/owner", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/owner/members", label: "Members", icon: Users, exact: false },
+  { href: "/owner/check-in", label: "Check-in", icon: UserCheck, exact: false },
+  { href: "/owner/qr", label: "Gate QR", icon: QrCode, exact: false },
   { href: "/owner/plans", label: "Plans", icon: Tags, exact: false },
 ];
 

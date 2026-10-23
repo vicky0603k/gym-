@@ -8,7 +8,7 @@
  * Rotation: one time step = QR_ROTATION_SECONDS seconds.
  * Server accepts the current step and one previous step (tolerance).
  */
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import {
   QR_ROTATION_SECONDS,
   QR_TOLERANCE_STEPS,
@@ -53,41 +53,39 @@ export function generateQrToken(): {
   return { token, expiresInSeconds };
 }
 
-/** Verify a token string. Returns the time step on success or throws. */
+/** Verify a token string. Returns the time step on success or throws QR_INVALID / QR_EXPIRED. */
 export function verifyQrToken(token: string): { step: number } {
   const secret = getSecret();
-  const parts = token.split(".");
+  const parts = token.trim().split(".");
   if (parts.length !== 2) {
     throw new Error("QR_INVALID");
   }
   const [payload, receivedSig] = parts;
 
-  // Verify signature
-  const expectedSig = sign(payload, secret);
-  // Constant-time comparison to prevent timing attacks
-  if (receivedSig.length !== expectedSig.length) {
-    throw new Error("QR_INVALID");
-  }
+  // Constant-time signature comparison
   const a = Buffer.from(receivedSig);
-  const b = Buffer.from(expectedSig);
-  if (!a.equals(b)) {
+  const b = Buffer.from(sign(payload, secret));
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
     throw new Error("QR_INVALID");
   }
 
-  // Decode payload
-  let parsed: { gym: string; step: number };
+  // Decode payload; it must name this gym and carry an integer step
+  let parsed: { gym?: unknown; step?: unknown };
   try {
     parsed = JSON.parse(Buffer.from(payload, "base64url").toString());
   } catch {
     throw new Error("QR_INVALID");
   }
-
-  // Check time window: accept current step and up to TOLERANCE steps back
-  const currentStep = currentTimeStep();
-  const diff = currentStep - parsed.step;
-  if (diff < 0 || diff > QR_TOLERANCE_STEPS) {
-    throw new Error("QR_EXPIRED");
+  if (parsed.gym !== GYM_ID || !Number.isSafeInteger(parsed.step)) {
+    throw new Error("QR_INVALID");
   }
+  const step = parsed.step as number;
 
-  return { step: parsed.step };
+  // Accept the current step and up to TOLERANCE steps back. A future step
+  // was never issued by this server, so it is invalid rather than expired.
+  const diff = currentTimeStep() - step;
+  if (diff < 0) throw new Error("QR_INVALID");
+  if (diff > QR_TOLERANCE_STEPS) throw new Error("QR_EXPIRED");
+
+  return { step };
 }

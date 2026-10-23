@@ -268,6 +268,28 @@ export type PaymentRpcResult<T> =
   | ({ ok: true } & T)
   | { ok: false; code: PaymentRpcErrorCode };
 
+export type CheckInRpcErrorCode =
+  | "QR_EXPIRED"
+  | "FORBIDDEN"
+  | "VALIDATION"
+  | "NOT_FOUND"
+  | "MEMBER_BLOCKED"
+  | "MEMBER_CANCELLED"
+  | "MEMBERSHIP_PAUSED"
+  | "MEMBERSHIP_EXPIRED"
+  | "DUPLICATE_CHECKIN";
+
+export type CheckInRpcResult =
+  | {
+      ok: true;
+      attendance_id: string;
+      checkin_at: string;
+      case_resolved: boolean;
+      week_visits: number;
+      weekly_target: number;
+    }
+  | { ok: false; code: CheckInRpcErrorCode; last_checkin_at?: string; expiry_date?: string | null };
+
 // ─── Supabase Database type (used with createClient) ───────────────────────
 
 export type Database = {
@@ -494,6 +516,17 @@ export type Database = {
       reject_payment: {
         Args: { p_payment_id: string; p_staff_id: string; p_reason: string };
         Returns: PaymentRpcResult<Record<never, never>>;
+      };
+      // Return shape mirrors the jsonb built in 007_check_in.sql.
+      check_in: {
+        Args: {
+          p_member_id: string;
+          p_source: AttendanceSource;
+          p_qr_step?: number | null;
+          p_staff_id?: string | null;
+          p_reason?: string | null;
+        };
+        Returns: CheckInRpcResult;
       };
     };
     Enums: {

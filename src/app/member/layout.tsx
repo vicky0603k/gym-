@@ -1,13 +1,17 @@
-import { Home } from "lucide-react";
+import { History, Home, ScanLine } from "lucide-react";
 import { NavLink } from "@/components/nav-link";
 import { LogoutButton } from "@/components/logout-button";
 
 /**
  * Member layout — bottom navigation, mobile-first, 56px tap targets.
- * A tab is listed only once its screen exists (Check-in, Renew, Add-ons come later).
+ * A tab is listed only once its screen exists (Renew and Add-ons come later).
  */
 
-const navItems = [{ href: "/member", label: "Home", icon: Home, exact: true }];
+const navItems = [
+  { href: "/member", label: "Home", icon: Home, exact: true },
+  { href: "/member/check-in", label: "Check-in", icon: ScanLine, exact: false },
+  { href: "/member/attendance", label: "Visits", icon: History, exact: false },
+];
 
 export default function MemberLayout({
   children,

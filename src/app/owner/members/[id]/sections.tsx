@@ -1,4 +1,5 @@
-import { CalendarCheck, History } from "lucide-react";
+import Link from "next/link";
+import { CalendarCheck, ChevronRight, History } from "lucide-react";
 import type { Attendance } from "@/services/supabase/database.types";
 import type { MembershipWithPlan } from "@/services/members";
 import { daysUntilKolkata, formatDisplayDate, formatDisplayDateTime } from "@/utils/dates";
@@ -86,7 +87,15 @@ export function MembershipHistory({ history }: { history: MembershipWithPlan[] }
   );
 }
 
-export function RecentVisits({ visits, lastVisit }: { visits: Attendance[]; lastVisit: string | null }) {
+export function RecentVisits({
+  memberId,
+  visits,
+  lastVisit,
+}: {
+  memberId: string;
+  visits: Attendance[];
+  lastVisit: string | null;
+}) {
   return (
     <section className="card p-5">
       <h2 className="font-semibold text-foreground mb-1 flex items-center gap-2">
@@ -104,6 +113,14 @@ export function RecentVisits({ visits, lastVisit }: { visits: Attendance[]; last
             </li>
           ))}
         </ul>
+      )}
+      {visits.length > 0 && (
+        <Link
+          href={`/owner/members/${memberId}/attendance`}
+          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-accent min-h-[48px]"
+        >
+          Full attendance history <ChevronRight className="h-4 w-4" aria-hidden />
+        </Link>
       )}
     </section>
   );

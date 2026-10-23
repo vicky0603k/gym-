@@ -65,7 +65,7 @@ Rules: a component never imports the Supabase client directly (it calls a servic
 1. Owner's QR display screen requests `GET /api/qr-token` and renders a QR containing a token: `HMAC(secret, gym_id + time_step)` where `time_step = floor(now / 45s)`. The screen refreshes every 45 seconds with a countdown.
 2. Member scans → token posted to the check-in server action.
 3. Server verifies the signature and accepts the current or previous time step (network tolerance), rejects anything older.
-4. Server loads the member's active membership: Expired → renewal error state; Paused/Frozen → paused state.
+4. Server checks the member first (Blocked / Cancelled → refused), then the current membership: Expired → renewal error state; Paused/Frozen → paused state. Steps 4–6 run inside one `check_in()` transaction with a per-member advisory lock (migration 007).
 5. Duplicate guard: if a valid check-in exists within 3 hours, return the duplicate state and write nothing.
 6. Insert attendance (`source = QR`), recompute the weekly goal, and if the member has an open no-show case, resolve it as *Returned*.
 7. Return the success state with the updated weekly goal.
