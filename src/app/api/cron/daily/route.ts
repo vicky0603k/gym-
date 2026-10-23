@@ -1,38 +1,38 @@
+import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { runDailyScan } from "@/services/red-list";
 
+const NO_STORE = { "Cache-Control": "no-store" };
+
+function authorised(header: string | null): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || !header) return false;
+  const a = Buffer.from(header);
+  const b = Buffer.from(`Bearer ${secret}`);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 /**
  * GET /api/cron/daily
- * Runs the daily scan (Red List) and builds renewal reminder lists.
+ * Runs the daily no-show scan (Red List). Vercel Cron calls it at 07:00 IST (vercel.json).
  *
- * Auth: Authorization: Bearer <CRON_SECRET> only (Vercel Cron).
+ * Auth: Authorization: Bearer <CRON_SECRET> only.
  * Idempotent: a second run on the same day creates no duplicate cases.
  *
- * Response: { cases_opened } counts for logging.
+ * Response: { cases_opened, followups_due } counts for logging.
  */
 export async function GET(request: Request) {
-  // Verify CRON_SECRET
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    );
+  if (!authorised(request.headers.get("authorization"))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: NO_STORE });
   }
 
   try {
     const result = await runDailyScan();
-    return NextResponse.json({
-      cases_opened: result.casesOpened,
-      reminders_created: 0, // reminders built in Module 8
-      followups_due: 0, // follow-ups built in Module 5
-    });
-  } catch {
     return NextResponse.json(
-      { error: "Daily scan failed" },
-      { status: 500 }
+      { cases_opened: result.casesOpened, followups_due: result.followupsDue },
+      { headers: NO_STORE }
     );
+  } catch {
+    return NextResponse.json({ error: "Daily scan failed" }, { status: 500, headers: NO_STORE });
   }
 }

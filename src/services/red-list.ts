@@ -1,296 +1,183 @@
 /**
- * Red List service — daily scan, case management, follow-up recording.
+ * Red List service — daily scan, case list, follow-up recording, WhatsApp text.
  *
  * Rules (from AGENTS.md / DATABASE.md):
  * - Never include Paused, Frozen, Expired or Cancelled members.
  * - One open case per member (partial unique index enforces this in the DB).
  * - Daily scan is idempotent — running twice on the same day does nothing new.
  * - Follow-up rows are append-only; never edit or delete them.
+ *
+ * The rules live in the database functions from migration 008 (one fair
+ * absence rule, set-based scan, transactional follow-up); this file validates
+ * input, applies the screen filters and maps results to plain language.
  */
+import { z } from "zod";
 import { createServiceClient } from "./supabase/server";
-import { todayKolkata, daysAgoKolkata } from "@/utils/dates";
-import { DEFAULT_NO_SHOW_THRESHOLD_DAYS, CASE_STATUS } from "@/utils/constants";
-import type {
-  NoShowCase,
-  FollowUp,
-  FollowUpOutcome,
-  FollowUpChannel,
-} from "./supabase/database.types";
+import { validationError } from "./memberships";
+import { addDaysToDate, formatDisplayDate, todayKolkata } from "@/utils/dates";
+import type { ActionResult } from "./payments";
+import type { FollowUp, NoShowCase, RedListDbRow } from "./supabase/database.types";
 
-export interface RedListRow {
-  case: NoShowCase;
-  memberName: string;
-  memberPhone: string;
-  planName: string | null;
-  expiryDate: string;
-  lastVisitDate: string | null;
-  absentDays: number;
-  trainerName: string | null;
-  lastFollowUp: FollowUp | null;
+export const RED_LIST_FILTERS = ["10-14", "15-21", "22+", "expiring-soon"] as const;
+export type RedListFilter = (typeof RED_LIST_FILTERS)[number];
+
+/** "Expiring soon" = within the owner-only 14-day renewal stage (ADR-009). */
+export const EXPIRING_SOON_DAYS = 14;
+
+export type RedListRow = RedListDbRow & { followUpDue: boolean };
+
+/** Run the daily no-show scan (cron and the owner's "Run scan now"). Throws on a database error. */
+export async function runDailyScan(): Promise<{ casesOpened: number; followupsDue: number; threshold: number }> {
+  const { data, error } = await createServiceClient().rpc("run_no_show_scan", {});
+  if (error || !data) throw new Error("SCAN_FAILED");
+  return { casesOpened: data.cases_opened, followupsDue: data.followups_due, threshold: data.threshold };
 }
 
-/**
- * Run the daily no-show scan. Idempotent.
- * Returns counts of new cases opened.
- */
-export async function runDailyScan(): Promise<{
-  casesOpened: number;
+export function matchesFilter(row: RedListDbRow, filter: RedListFilter | undefined, today: string): boolean {
+  switch (filter) {
+    case "10-14":
+      return row.absent_days >= 10 && row.absent_days <= 14;
+    case "15-21":
+      return row.absent_days >= 15 && row.absent_days <= 21;
+    case "22+":
+      return row.absent_days >= 22;
+    case "expiring-soon":
+      return row.expiry_date <= addDaysToDate(today, EXPIRING_SOON_DAYS);
+    default:
+      return true;
+  }
+}
+
+/** Open cases for eligible members, most absent first, plus per-filter counts. Throws on a database error. */
+export async function getRedList(filter?: RedListFilter): Promise<{
+  rows: RedListRow[];
+  counts: Record<RedListFilter | "all", number>;
+  dueToday: number;
 }> {
-  const supabase = createServiceClient();
+  const { data, error } = await createServiceClient().rpc("red_list", {});
+  if (error || !data) throw new Error("RED_LIST_LOAD_FAILED");
   const today = todayKolkata();
 
-  // Load threshold from settings
-  const { data: settings } = await supabase
-    .from("settings")
-    .select("no_show_threshold_days")
-    .limit(1)
-    .single();
+  const all: RedListRow[] = data.map((r) => ({
+    ...r,
+    followUpDue: r.case_status === "FollowUpDue" || (r.next_action_date !== null && r.next_action_date <= today),
+  }));
+  const counts = { all: all.length } as Record<RedListFilter | "all", number>;
+  for (const f of RED_LIST_FILTERS) counts[f] = all.filter((r) => matchesFilter(r, f, today)).length;
 
-  const threshold =
-    settings?.no_show_threshold_days ?? DEFAULT_NO_SHOW_THRESHOLD_DAYS;
-
-  // Get all Active members
-  const { data: activeMembers } = await supabase
-    .from("members")
-    .select("id")
-    .eq("status", "Active");
-
-  if (!activeMembers?.length) return { casesOpened: 0 };
-
-  // Get their active memberships (exclude Paused/Frozen/Expired/Cancelled)
-  const memberIds = activeMembers.map((m) => m.id);
-
-  const { data: activeMemberships } = await supabase
-    .from("memberships")
-    .select("member_id, expiry_date, status")
-    .in("member_id", memberIds)
-    .eq("status", "Active");
-
-  if (!activeMemberships?.length) return { casesOpened: 0 };
-
-  const eligibleMemberIds = new Set(
-    activeMemberships.map((m) => m.member_id)
-  );
-
-  // Get last check-in per member
-  const { data: lastCheckins } = await supabase
-    .from("attendance")
-    .select("member_id, checkin_at")
-    .in("member_id", [...eligibleMemberIds])
-    .order("checkin_at", { ascending: false });
-
-  const lastVisitMap = new Map<string, string>();
-  for (const row of lastCheckins ?? []) {
-    if (!lastVisitMap.has(row.member_id)) {
-      lastVisitMap.set(row.member_id, row.checkin_at);
-    }
-  }
-
-  // Get members with an already open case
-  const { data: openCases } = await supabase
-    .from("no_show_cases")
-    .select("member_id")
-    .in("member_id", [...eligibleMemberIds])
-    .in("status", [
-      CASE_STATUS.OPEN,
-      CASE_STATUS.CONTACTED,
-      CASE_STATUS.FOLLOW_UP_DUE,
-    ]);
-
-  const membersWithOpenCase = new Set(
-    (openCases ?? []).map((c) => c.member_id)
-  );
-
-  let casesOpened = 0;
-
-  for (const memberId of eligibleMemberIds) {
-    if (membersWithOpenCase.has(memberId)) continue;
-
-    const lastVisit = lastVisitMap.get(memberId);
-    const absentDays = lastVisit
-      ? daysAgoKolkata(lastVisit)
-      : // Never visited — use join date as reference
-        // We'll treat 999 to always trigger; the scan service guards this
-        999;
-
-    if (absentDays >= threshold) {
-      const { error } = await supabase.from("no_show_cases").insert({
-        member_id: memberId,
-        opened_on: today,
-        absent_days_at_open: absentDays,
-        status: CASE_STATUS.OPEN,
-      });
-
-      if (!error) casesOpened++;
-    }
-  }
-
-  return { casesOpened };
-}
-
-export type RedListFilter = "10-14" | "15-21" | "22+" | "expiring-soon";
-
-/**
- * Get the Red List with optional filter.
- */
-export async function getRedList(
-  filter?: RedListFilter
-): Promise<RedListRow[]> {
-  const supabase = createServiceClient();
-
-  const { data } = await supabase
-    .from("no_show_cases")
-    .select(
-      `
-      *,
-      members (id, name, phone, assigned_trainer_id, weekly_target),
-      followups (id, channel, outcome, notes, staff_id, created_at, next_action_date)
-    `
-    )
-    .in("status", [
-      CASE_STATUS.OPEN,
-      CASE_STATUS.CONTACTED,
-      CASE_STATUS.FOLLOW_UP_DUE,
-    ])
-    .order("absent_days_at_open", { ascending: false });
-
-  type CaseWithJoins = NoShowCase & {
-    members: {
-      id: string;
-      name: string;
-      phone: string;
-      assigned_trainer_id: string | null;
-      weekly_target: number;
-    } | null;
-    followups: FollowUp[];
+  return {
+    rows: all.filter((r) => matchesFilter(r, filter, today)),
+    counts,
+    dueToday: all.filter((r) => r.followUpDue).length,
   };
-  const cases = data as CaseWithJoins[] | null;
-
-  if (!cases) return [];
-
-  // Enrich with membership and trainer info
-  const rows: RedListRow[] = [];
-
-  for (const c of cases) {
-    const member = c.members;
-    if (!member) continue;
-
-    // Current active membership
-    const { data: membershipData } = await supabase
-      .from("memberships")
-      .select("expiry_date, plans(name)")
-      .eq("member_id", member.id)
-      .eq("status", "Active")
-      .order("expiry_date", { ascending: false })
-      .limit(1)
-      .single();
-
-    const membership = membershipData as
-      | { expiry_date: string; plans: { name: string } | null }
-      | null;
-
-    // Last visit
-    const { data: lastAttendance } = await supabase
-      .from("attendance")
-      .select("checkin_at")
-      .eq("member_id", member.id)
-      .order("checkin_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    const absentDays = lastAttendance
-      ? daysAgoKolkata(lastAttendance.checkin_at)
-      : c.absent_days_at_open;
-
-    // Apply filter
-    if (filter === "10-14" && (absentDays < 10 || absentDays > 14)) continue;
-    if (filter === "15-21" && (absentDays < 15 || absentDays > 21)) continue;
-    if (filter === "22+" && absentDays < 22) continue;
-
-    // Trainer name
-    let trainerName: string | null = null;
-    if (member.assigned_trainer_id) {
-      const { data: trainer } = await supabase
-        .from("trainers")
-        .select("name")
-        .eq("id", member.assigned_trainer_id)
-        .single();
-      trainerName = trainer?.name ?? null;
-    }
-
-    const followups = (c.followups ?? []) as FollowUp[];
-    const lastFollowUp =
-      followups.length > 0
-        ? followups.sort(
-            (a, b) =>
-              new Date(b.created_at).getTime() -
-              new Date(a.created_at).getTime()
-          )[0]
-        : null;
-
-    const planData = membership?.plans;
-
-    rows.push({
-      case: c,
-      memberName: member.name,
-      memberPhone: member.phone,
-      planName: planData?.name ?? null,
-      expiryDate: membership?.expiry_date ?? "",
-      lastVisitDate: lastAttendance
-        ? lastAttendance.checkin_at
-        : null,
-      absentDays,
-      trainerName,
-      lastFollowUp,
-    });
-  }
-
-  return rows;
 }
 
-/**
- * Record a follow-up and update the case status.
- */
-export async function recordFollowUp(params: {
-  caseId: string;
-  channel: FollowUpChannel;
-  outcome: FollowUpOutcome;
-  notes?: string;
-  nextActionDate?: string;
-  staffId: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createServiceClient();
+export const FOLLOW_UP_OUTCOMES = [
+  "WillReturn",
+  "Injured",
+  "Travelling",
+  "TimingIssue",
+  "Unhappy",
+  "NoResponse",
+  "Cancelled",
+] as const;
+export const FOLLOW_UP_CHANNELS = ["Call", "WhatsApp", "InPerson"] as const;
 
-  // Append follow-up row (never edit existing rows)
-  const { error: followUpError } = await supabase.from("followups").insert({
-    case_id: params.caseId,
-    channel: params.channel,
-    outcome: params.outcome,
-    notes: params.notes ?? null,
-    staff_id: params.staffId,
-    next_action_date: params.nextActionDate ?? null,
+export const followUpSchema = z
+  .object({
+    caseId: z.string().uuid("This case could not be found"),
+    channel: z.enum(FOLLOW_UP_CHANNELS, { errorMap: () => ({ message: "Choose how you contacted them" }) }),
+    outcome: z.enum(FOLLOW_UP_OUTCOMES, { errorMap: () => ({ message: "Choose what they said" }) }),
+    notes: z.string().trim().max(500, "Keep the note under 500 characters").optional(),
+    nextActionDate: z.preprocess(
+      (v) => (v === "" ? undefined : v),
+      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a valid date").optional()
+    ),
+  })
+  .superRefine((v, ctx) => {
+    if (v.outcome === "Cancelled") return;
+    const today = todayKolkata();
+    if (!v.nextActionDate) {
+      ctx.addIssue({ code: "custom", path: ["nextActionDate"], message: "Choose the date for the next follow-up" });
+    } else if (v.nextActionDate < today) {
+      ctx.addIssue({ code: "custom", path: ["nextActionDate"], message: "The next follow-up can't be in the past" });
+    } else if (v.nextActionDate > addDaysToDate(today, 90)) {
+      ctx.addIssue({ code: "custom", path: ["nextActionDate"], message: "Choose a date within the next 90 days" });
+    }
   });
 
-  if (followUpError) {
-    return { ok: false, error: "Failed to record follow-up." };
+const FOLLOW_UP_ERRORS: Record<string, string> = {
+  FORBIDDEN: "Only gym staff can record follow-ups.",
+  VALIDATION: "Choose a next follow-up date from today onwards.",
+  NOT_FOUND: "This case could not be found. Refresh the Red List.",
+  INVALID_STATE: "This case is already resolved. Refresh the Red List.",
+};
+
+/** Append a follow-up and update the case — one transaction in record_followup(). */
+export async function recordFollowUp(input: unknown, staffId: string): Promise<ActionResult<{ closed: boolean }>> {
+  const parsed = followUpSchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+  const v = parsed.data;
+
+  const { data, error } = await createServiceClient().rpc("record_followup", {
+    p_case_id: v.caseId,
+    p_staff_id: staffId,
+    p_channel: v.channel,
+    p_outcome: v.outcome,
+    p_notes: v.notes || null,
+    p_next_action_date: v.outcome === "Cancelled" ? null : v.nextActionDate ?? null,
+  });
+  if (error || !data) {
+    return { ok: false, error: { code: "INVALID_STATE", message: "We couldn't save this follow-up. Please try again." } };
   }
+  if (!data.ok) return { ok: false, error: { code: data.code, message: FOLLOW_UP_ERRORS[data.code] } };
+  return { ok: true, data: { closed: data.closed } };
+}
 
-  // Update case status
-  const newStatus =
-    params.outcome === "Cancelled"
-      ? CASE_STATUS.CLOSED
-      : params.nextActionDate
-      ? CASE_STATUS.FOLLOW_UP_DUE
-      : CASE_STATUS.CONTACTED;
+export type MemberCase = NoShowCase & { followups: FollowUp[] };
 
-  await supabase
+/** Every Red List case for a member with its full follow-up history, newest first. Throws on a database error. */
+export async function getMemberCases(memberId: string): Promise<MemberCase[]> {
+  const supabase = createServiceClient();
+  const { data: cases, error } = await supabase
     .from("no_show_cases")
-    .update({
-      status: newStatus,
-      next_action_date: params.nextActionDate ?? null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", params.caseId);
+    .select("*")
+    .eq("member_id", memberId)
+    .order("opened_on", { ascending: false });
+  if (error) throw new Error("CASES_LOAD_FAILED");
+  if (!cases.length) return [];
 
-  return { ok: true };
+  const { data: followups, error: fError } = await supabase
+    .from("followups")
+    .select("*")
+    .in("case_id", cases.map((c) => c.id))
+    .order("created_at", { ascending: false });
+  if (fError) throw new Error("FOLLOWUPS_LOAD_FAILED");
+
+  return cases.map((c) => ({ ...c, followups: followups.filter((f) => f.case_id === c.id) }));
+}
+
+/**
+ * The API.md "No-show care" message, fully rendered — never a raw {{placeholder}}.
+ * Without a gym phone for the support link, it asks the member to reply instead.
+ */
+export function noShowMessage(p: { name: string; lastVisit: string | null; joinDate: string; gymPhone: string | null }): string {
+  const firstName = p.name.trim().split(/\s+/)[0];
+  const opener = p.lastVisit
+    ? `your last gym check-in was on ${formatDisplayDate(p.lastVisit)}.`
+    : `we haven't seen you at the gym since you joined on ${formatDisplayDate(p.joinDate)}.`;
+  const help = p.gymPhone && /^[6-9]\d{9}$/.test(p.gymPhone)
+    ? `reply here: https://wa.me/91${p.gymPhone}`
+    : "just reply to this message.";
+  return `Hi ${firstName}, ${opener} Is everything okay? If you need a timing change, a pause, or trainer help, ${help}`;
+}
+
+export function whatsAppLink(phone: string, text: string): string {
+  return `https://wa.me/91${phone}?text=${encodeURIComponent(text)}`;
+}
+
+/** Gym phone for the WhatsApp support link (settings.phone). Null when not set. */
+export async function getGymPhone(): Promise<string | null> {
+  const { data } = await createServiceClient().from("settings").select("phone").limit(1).maybeSingle();
+  return data?.phone?.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "") || null;
 }

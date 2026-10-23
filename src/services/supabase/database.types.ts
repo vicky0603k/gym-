@@ -290,6 +290,26 @@ export type CheckInRpcResult =
     }
   | { ok: false; code: CheckInRpcErrorCode; last_checkin_at?: string; expiry_date?: string | null };
 
+export type RedListDbRow = {
+  case_id: string;
+  member_id: string;
+  member_name: string;
+  member_phone: string;
+  case_status: CaseStatus;
+  opened_on: string;
+  next_action_date: string | null;
+  plan_name: string;
+  expiry_date: string;
+  join_date: string;
+  last_visit: string | null;
+  absent_days: number;
+  trainer_name: string | null;
+  last_followup_at: string | null;
+  last_followup_outcome: FollowUpOutcome | null;
+  last_followup_channel: FollowUpChannel | null;
+  followup_count: number;
+};
+
 // ─── Supabase Database type (used with createClient) ───────────────────────
 
 export type Database = {
@@ -527,6 +547,26 @@ export type Database = {
           p_reason?: string | null;
         };
         Returns: CheckInRpcResult;
+      };
+      // Shapes mirror 008_red_list.sql.
+      run_no_show_scan: {
+        Args: Record<string, never>;
+        Returns: { ok: true; cases_opened: number; followups_due: number; threshold: number };
+      };
+      red_list: {
+        Args: Record<string, never>;
+        Returns: RedListDbRow[];
+      };
+      record_followup: {
+        Args: {
+          p_case_id: string;
+          p_staff_id: string;
+          p_channel: FollowUpChannel;
+          p_outcome: FollowUpOutcome;
+          p_notes: string | null;
+          p_next_action_date: string | null;
+        };
+        Returns: { ok: true; closed: boolean } | { ok: false; code: "FORBIDDEN" | "VALIDATION" | "NOT_FOUND" | "INVALID_STATE" };
       };
     };
     Enums: {

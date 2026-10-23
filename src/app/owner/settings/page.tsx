@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ChevronRight, Tags } from "lucide-react";
 import { getCurrentStaff } from "@/services/auth";
 import { getWeeklyGoalDefault } from "@/services/settings";
 import { WeeklyGoalForm } from "./weekly-goal-form";
@@ -21,6 +23,15 @@ export default async function SettingsPage() {
         </p>
         <WeeklyGoalForm value={weeklyGoalDefault} />
       </section>
+
+      <Link href="/owner/plans" className="card mt-4 flex items-center gap-3 p-5 min-h-[64px] hover:bg-surface-2">
+        <Tags className="h-5 w-5 text-muted" aria-hidden />
+        <span className="flex-1">
+          <span className="block font-semibold text-foreground">Membership plans</span>
+          <span className="block text-sm text-muted">Prices, discounts and which plans are offered</span>
+        </span>
+        <ChevronRight className="h-4 w-4 text-muted" aria-hidden />
+      </Link>
     </div>
   );
 }

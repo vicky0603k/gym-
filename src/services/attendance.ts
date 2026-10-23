@@ -10,7 +10,7 @@
 import { z } from "zod";
 import { createServiceClient } from "./supabase/server";
 import { verifyQrToken } from "./qr";
-import { formatDisplayDate, formatDisplayTime, toKolkataDateString } from "@/utils/dates";
+import { formatDisplayDate, formatDisplayTime, kolkataMidnightUtc, toKolkataDateString, todayKolkata } from "@/utils/dates";
 import type { Attendance, CheckInRpcErrorCode, CheckInRpcResult } from "./supabase/database.types";
 
 export type CheckInErrorCode = CheckInRpcErrorCode | "QR_INVALID" | "INVALID_STATE";
@@ -174,4 +174,14 @@ export async function getLastCheckinDate(
 
   if (!data) return null;
   return toKolkataDateString(data.checkin_at);
+}
+
+/** Check-ins since 00:00 today in Kolkata, all members. Throws on a database error. */
+export async function countCheckinsToday(): Promise<number> {
+  const { count, error } = await createServiceClient()
+    .from("attendance")
+    .select("id", { count: "exact", head: true })
+    .gte("checkin_at", kolkataMidnightUtc(todayKolkata()).toISOString());
+  if (error) throw new Error("ATTENDANCE_COUNT_FAILED");
+  return count ?? 0;
 }

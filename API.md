@@ -46,9 +46,9 @@ Runs the daily scan (Red List) and builds renewal reminder + follow-ups-due list
 | `listMembers` / `getMember` | search, filters | Search by name or phone. Member detail includes memberships, attendance, cases, orders. |
 | `createMember` / `updateMember` / `setMemberStatus` | member fields | Pause/resume writes audit entries; pausing requires a reason. |
 | `assistedCheckIn` | member_id, reason (required) | Creates attendance with `source = Assisted`, staff id, reason; resolves an open case like a QR check-in. Missing reason = `VALIDATION` error. |
-| `runRedListScan` | — | Manual trigger of the same logic as the cron (for demos/testing). Same idempotency rules. |
-| `listRedList` | filter: `10-14 / 15-21 / 22+ / expiring-soon` | Open cases with member, plan, expiry, last visit, absent days, trainer, last follow-up. |
-| `recordFollowUp` | case_id, channel, outcome, next_action_date?, notes? | Appends a follow-up row, updates case status/next action. Rows are never edited or deleted afterwards. |
+| `runRedListScan` | — | Manual trigger (Owner) of the same `run_no_show_scan()` the cron runs (migration 008). Same idempotency rules. Absence is counted from the latest of: last visit, join date, end of the last pause, or the last case staff closed — so new members and members back from a pause are not flagged at once. |
+| `listRedList` | filter: `10-14 / 15-21 / 22+ / expiring-soon` | Open cases with member, plan, expiry, last visit, absent days, trainer, last follow-up. Only Active members on a running membership are shown. Expiring soon = expiry within 14 days (the owner-only renewal stage). |
+| `recordFollowUp` | case_id, channel, outcome, next_action_date?, notes? | Appends a follow-up row, updates case status/next action in one transaction (`record_followup()`). A next action date (today or later) is required except for outcome `Cancelled`, which closes the case. Rows are never edited or deleted afterwards. Owner and front desk. |
 | `listRenewalsDue` | stage | Pipeline grouped by reminder stage with expected amounts. |
 | `listPendingPayments` | — | The verification queue: member, purpose, amount, member-claimed reference. |
 | `verifyPayment` | payment_id, decision: verify/reject, provider_ref | **The most sensitive action in the system.** One transaction: payment `Pending → Paid` (or Failed on reject), membership extension or add-on activation, receipt, audit row. Verifying an already-Paid payment returns `ALREADY_VERIFIED` and changes nothing. Owner role only. |
