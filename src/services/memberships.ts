@@ -2,7 +2,6 @@
  * Memberships service — plans, lifecycle, renewal orders.
  */
 import { createServiceClient } from "./supabase/server";
-import { todayKolkata } from "@/utils/dates";
 import { applyDiscount, discountAmount } from "@/utils/money";
 import type { Plan, Membership } from "./supabase/database.types";
 import type { ActionResult } from "./payments";

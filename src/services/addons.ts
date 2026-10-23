@@ -7,7 +7,7 @@
  * - Add-ons are never pre-selected; always an explicit member action.
  */
 import { createServiceClient } from "./supabase/server";
-import type { Addon, AddonOrder } from "./supabase/database.types";
+import type { Addon } from "./supabase/database.types";
 import type { ActionResult } from "./payments";
 
 /** List active add-ons with live stock/availability */

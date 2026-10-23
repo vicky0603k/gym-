@@ -257,6 +257,17 @@ export type AuditLog = {
   created_at: string;
 };
 
+export type PaymentRpcErrorCode =
+  | "FORBIDDEN"
+  | "VALIDATION"
+  | "NOT_FOUND"
+  | "ALREADY_VERIFIED"
+  | "INVALID_STATE";
+
+export type PaymentRpcResult<T> =
+  | ({ ok: true } & T)
+  | { ok: false; code: PaymentRpcErrorCode };
+
 // ─── Supabase Database type (used with createClient) ───────────────────────
 
 export type Database = {
@@ -474,6 +485,15 @@ export type Database = {
       verify_member_pin: {
         Args: { p_phone: string; p_pin_hash: string };
         Returns: string | null;
+      };
+      // Return shapes mirror the jsonb built in 005_hardening.sql.
+      verify_payment: {
+        Args: { p_payment_id: string; p_provider_ref: string; p_staff_id: string };
+        Returns: PaymentRpcResult<{ new_expiry: string; payment_id: string }>;
+      };
+      reject_payment: {
+        Args: { p_payment_id: string; p_staff_id: string; p_reason: string };
+        Returns: PaymentRpcResult<Record<never, never>>;
       };
     };
     Enums: {

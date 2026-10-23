@@ -6,13 +6,8 @@
  * Frozen weeks are excluded from the consecutive-weeks count.
  */
 import { createServiceClient } from "./supabase/server";
-import {
-  weekStartKolkata,
-  weekEndKolkata,
-  toKolkata,
-  daysAgoKolkata,
-} from "@/utils/dates";
-import { addDays, format } from "date-fns";
+import { weekStartKolkata, weekEndKolkata } from "@/utils/dates";
+import { format } from "date-fns";
 
 export interface WeeklyGoalState {
   completed: number;
@@ -57,11 +52,7 @@ export async function getWeeklyGoalState(
     .lt("checkin_at", utcEnd.toISOString());
 
   // Consecutive goal-met weeks (look back up to 52 weeks)
-  const consecutiveWeeksGoalMet = await countConsecutiveGoalWeeks(
-    memberId,
-    target,
-    memberId
-  );
+  const consecutiveWeeksGoalMet = await countConsecutiveGoalWeeks(memberId, target);
 
   return {
     completed: completed ?? 0,
@@ -77,8 +68,7 @@ export async function getWeeklyGoalState(
  */
 async function countConsecutiveGoalWeeks(
   memberId: string,
-  target: number,
-  _memberIdUnused: string
+  target: number
 ): Promise<number> {
   const supabase = createServiceClient();
 
