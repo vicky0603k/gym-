@@ -3,7 +3,7 @@
  */
 import { z, type ZodError } from "zod";
 import { createServiceClient } from "./supabase/server";
-import { applyDiscount, discountAmount, formatRupees } from "@/utils/money";
+import { formatRupees } from "@/utils/money";
 import { todayKolkata } from "@/utils/dates";
 import type { Plan, Membership } from "./supabase/database.types";
 import type { ActionResult } from "./payments";
@@ -155,96 +155,36 @@ export async function getActiveMembership(
   return data ?? null;
 }
 
-/** Create a renewal order and a Pending payment */
+const RENEWAL_ERRORS: Record<string, string> = {
+  NOT_FOUND: "We couldn't find your member account. Please speak to the front desk.",
+  FORBIDDEN: "Online renewal isn't available on this account. Please speak to the front desk.",
+  NO_MEMBERSHIP: "You don't have a membership to renew yet. Please speak to the front desk.",
+  PLAN_UNAVAILABLE: "This plan is no longer offered. Choose another plan.",
+  PAYMENT_CLAIMED: "You've already sent a payment for another plan. Wait for the gym to confirm it, or ask the front desk.",
+};
+
+/**
+ * Renewal order + Pending payment, created together by create_renewal_order()
+ * (migration 009). A double tap returns the same order; choosing another plan
+ * before paying replaces the unpaid one. Nothing here extends a membership —
+ * only verifyPayment does.
+ */
 export async function createRenewalOrder(params: {
   memberId: string;
   planId: string;
-  currentMembershipId: string;
-}): Promise<
-  ActionResult<{
-    orderId: string;
-    paymentId: string;
-    finalAmount: number;
-    discountAmount: number;
-  }>
-> {
-  const supabase = createServiceClient();
-
-  const { data: plan } = await supabase
-    .from("plans")
-    .select("*")
-    .eq("id", params.planId)
-    .eq("is_active", true)
-    .single();
-
-  if (!plan) {
-    return {
-      ok: false,
-      error: { code: "NOT_FOUND", message: "Plan not found or inactive." },
-    };
+}): Promise<ActionResult<{ paymentId: string; existing: boolean }>> {
+  if (!z.string().uuid().safeParse(params.planId).success) {
+    return { ok: false, error: { code: "VALIDATION", message: "Choose a plan to renew." } };
   }
-
-  const finalAmount = applyDiscount(plan.price, plan.discount_pct);
-  const discount = discountAmount(plan.price, plan.discount_pct);
-
-  // Create payment first
-  const { data: payment, error: paymentError } = await supabase
-    .from("payments")
-    .insert({
-      member_id: params.memberId,
-      purpose: "Renewal",
-      ref_id: params.currentMembershipId, // will be updated to order id
-      amount: finalAmount,
-      status: "Pending",
-    })
-    .select()
-    .single();
-
-  if (paymentError || !payment) {
-    return {
-      ok: false,
-      error: { code: "INVALID_STATE", message: "Failed to create payment." },
-    };
+  const { data, error } = await createServiceClient().rpc("create_renewal_order", {
+    p_member_id: params.memberId,
+    p_plan_id: params.planId,
+  });
+  if (error || !data) {
+    return { ok: false, error: { code: "INVALID_STATE", message: "We couldn't start your renewal. Please try again." } };
   }
-
-  // Create renewal order
-  const { data: order, error: orderError } = await supabase
-    .from("renewal_orders")
-    .insert({
-      membership_id: params.currentMembershipId,
-      plan_id: params.planId,
-      amount: plan.price,
-      discount,
-      payment_id: payment.id,
-      status: "Pending",
-    })
-    .select()
-    .single();
-
-  if (orderError || !order) {
-    // Rollback payment
-    await supabase.from("payments").delete().eq("id", payment.id);
-    return {
-      ok: false,
-      error: { code: "INVALID_STATE", message: "Failed to create renewal order." },
-    };
-  }
-
-  // Update payment ref_id to the order id
-  await supabase
-    .from("payments")
-    .update({ ref_id: order.id, updated_at: new Date().toISOString() })
-    .eq("id", payment.id);
-
-  return {
-    ok: true,
-    data: {
-      orderId: order.id,
-      paymentId: payment.id,
-      finalAmount,
-      discountAmount: discount,
-    },
-  };
+  if (!data.ok) return { ok: false, error: { code: data.code, message: RENEWAL_ERRORS[data.code] } };
+  return { ok: true, data: { paymentId: data.payment_id, existing: data.existing } };
 }
 
 const STATUS_SAVE_FAILED = {

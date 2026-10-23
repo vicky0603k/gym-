@@ -185,6 +185,7 @@ export type RenewalOrder = {
   discount: number;
   payment_id: string;
   status: RenewalOrderStatus;
+  new_expiry: string | null; // set once by verify_payment (009)
   created_at: string;
   updated_at: string;
 };
@@ -308,6 +309,19 @@ export type RedListDbRow = {
   last_followup_outcome: FollowUpOutcome | null;
   last_followup_channel: FollowUpChannel | null;
   followup_count: number;
+};
+
+export type RenewalDueDbRow = {
+  member_id: string;
+  member_name: string;
+  member_phone: string;
+  plan_name: string;
+  renewal_amount: number;
+  expiry_date: string;
+  days_left: number;
+  pending_payment_id: string | null;
+  pending_amount: number | null;
+  pending_reference: string | null;
 };
 
 // ─── Supabase Database type (used with createClient) ───────────────────────
@@ -443,11 +457,12 @@ export type Database = {
         Row: RenewalOrder;
         Insert: Omit<
           RenewalOrder,
-          "id" | "created_at" | "updated_at" | "discount" | "status"
+          "id" | "created_at" | "updated_at" | "discount" | "status" | "new_expiry"
         > & {
           id?: string;
           discount?: number;
           status?: RenewalOrderStatus;
+          new_expiry?: string | null;
         };
         Update: Partial<Omit<RenewalOrder, "id" | "created_at">>;
         Relationships: [];
@@ -547,6 +562,21 @@ export type Database = {
           p_reason?: string | null;
         };
         Returns: CheckInRpcResult;
+      };
+      // Shapes mirror 009_renewals.sql.
+      create_renewal_order: {
+        Args: { p_member_id: string; p_plan_id: string };
+        Returns:
+          | { ok: true; existing: boolean; payment_id: string }
+          | { ok: false; code: "NOT_FOUND" | "FORBIDDEN" | "NO_MEMBERSHIP" | "PLAN_UNAVAILABLE" | "PAYMENT_CLAIMED" };
+      };
+      claim_renewal_payment: {
+        Args: { p_payment_id: string; p_member_id: string; p_reference: string };
+        Returns: { ok: true } | { ok: false; code: "VALIDATION" | "NOT_FOUND" | "INVALID_STATE" };
+      };
+      renewals_due: {
+        Args: Record<string, never>;
+        Returns: RenewalDueDbRow[];
       };
       // Shapes mirror 008_red_list.sql.
       run_no_show_scan: {

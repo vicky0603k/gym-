@@ -7,9 +7,11 @@
  * - A failed/rejected payment never extends anything.
  * - Financial rows are never deleted or silently edited.
  */
+import { z } from "zod";
 import { createServiceClient } from "./supabase/server";
+import { validationError } from "./memberships";
 import { PAYMENT_STATUS } from "@/utils/constants";
-import type { Payment, PaymentRpcErrorCode } from "./supabase/database.types";
+import type { Payment, PaymentRpcErrorCode, RenewalOrder } from "./supabase/database.types";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
@@ -35,8 +37,8 @@ function rpcError(code: PaymentRpcErrorCode, validationMessage: string) {
 
 /**
  * Verify a pending renewal payment (Owner only — checked in the database).
- * verify_payment (migrations 005, 006) runs as one locked transaction: payment
- * Pending → Paid, renewal order Paid, expiry extended from
+ * verify_payment (migrations 005, 006, 009) runs as one locked transaction: payment
+ * Pending → Paid, renewal order Paid (with new_expiry), membership on the paid plan, expiry extended from
  * max(today Kolkata, current expiry) + plan duration, audit row.
  * Verifying an already-Paid payment returns ALREADY_VERIFIED and changes nothing.
  * A Cancelled or Pending membership returns INVALID_STATE and is never made Active.
@@ -75,18 +77,151 @@ export async function rejectPayment(params: {
   return { ok: true, data: undefined };
 }
 
-/** Get a payment's receipt data (member must own it — checked by caller) */
-export async function getReceipt(
-  paymentId: string
-): Promise<Payment | null> {
-  const supabase = createServiceClient();
+export interface PaymentDetail {
+  id: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  amount: number;
+  baseAmount: number;
+  discount: number;
+  status: Payment["status"];
+  providerRef: string | null;
+  createdAt: string;
+  verifiedAt: string | null;
+  planName: string;
+  durationDays: number;
+  newExpiry: string | null;
+  orderStatus: RenewalOrder["status"];
+}
 
-  const { data } = await supabase
+/** Receipt number shown to people: short, stable, derived from the payment id. */
+export function receiptNumber(paymentId: string): string {
+  return `RCPT-${paymentId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}
+
+async function withOrders(payments: Payment[]): Promise<PaymentDetail[]> {
+  if (!payments.length) return [];
+  const supabase = createServiceClient();
+  const [orders, members] = await Promise.all([
+    supabase.from("renewal_orders").select("*").in("payment_id", payments.map((p) => p.id)),
+    supabase.from("members").select("id, name, phone").in("id", [...new Set(payments.map((p) => p.member_id))]),
+  ]);
+  if (orders.error || members.error) throw new Error("PAYMENTS_LOAD_FAILED");
+  const plans = await supabase.from("plans").select("id, name, duration_days").in("id", [...new Set(orders.data.map((o) => o.plan_id))]);
+  if (plans.error) throw new Error("PAYMENTS_LOAD_FAILED");
+
+  return payments.flatMap((p) => {
+    const order = orders.data.find((o) => o.payment_id === p.id);
+    const member = members.data.find((m) => m.id === p.member_id);
+    const plan = plans.data.find((x) => x.id === order?.plan_id);
+    if (!order || !member) return [];
+    return [{
+      id: p.id,
+      memberId: member.id,
+      memberName: member.name,
+      memberPhone: member.phone,
+      amount: p.amount,
+      baseAmount: order.amount,
+      discount: order.discount,
+      status: p.status,
+      providerRef: p.provider_ref,
+      createdAt: p.created_at,
+      verifiedAt: p.verified_at,
+      planName: plan?.name ?? "Membership",
+      durationDays: plan?.duration_days ?? 0,
+      newExpiry: order.new_expiry,
+      orderStatus: order.status,
+    }];
+  });
+}
+
+/**
+ * The owner's verification queue: Pending renewal payments. Those where the
+ * member has sent a UPI reference come first, then oldest first. Throws on a database error.
+ */
+export async function listPendingPayments(): Promise<PaymentDetail[]> {
+  const { data, error } = await createServiceClient()
     .from("payments")
     .select("*")
-    .eq("id", paymentId)
-    .eq("status", PAYMENT_STATUS.PAID)
-    .single();
-
-  return data ?? null;
+    .eq("status", PAYMENT_STATUS.PENDING)
+    .eq("purpose", "Renewal")
+    .order("created_at", { ascending: true })
+    .limit(200);
+  if (error) throw new Error("PAYMENTS_LOAD_FAILED");
+  const rows = await withOrders(data);
+  return [...rows.filter((r) => r.providerRef), ...rows.filter((r) => !r.providerRef)];
 }
+
+/**
+ * One renewal payment with its order. Pass memberId to scope it to that
+ * member (member screens) — another member's payment returns null.
+ */
+export async function getPaymentDetail(paymentId: string, memberId?: string): Promise<PaymentDetail | null> {
+  if (!z.string().uuid().safeParse(paymentId).success) return null;
+  let query = createServiceClient().from("payments").select("*").eq("id", paymentId).eq("purpose", "Renewal");
+  if (memberId) query = query.eq("member_id", memberId);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw new Error("PAYMENT_LOAD_FAILED");
+  if (!data) return null;
+  return (await withOrders([data]))[0] ?? null;
+}
+
+/** A member's renewal payments, newest first. Throws on a database error. */
+export async function listMemberPayments(memberId: string): Promise<PaymentDetail[]> {
+  const { data, error } = await createServiceClient()
+    .from("payments")
+    .select("*")
+    .eq("member_id", memberId)
+    .eq("purpose", "Renewal")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw new Error("PAYMENTS_LOAD_FAILED");
+  return withOrders(data);
+}
+
+export const claimPaymentSchema = z.object({
+  paymentId: z.string().uuid("This payment could not be found"),
+  reference: z
+    .string({ required_error: "Enter the UPI reference number from your payment app" })
+    .trim()
+    .regex(/^[A-Za-z0-9]{6,30}$/, "Enter the UPI reference number (UTR) exactly as your payment app shows it"),
+});
+
+const CLAIM_ERRORS: Record<string, string> = {
+  VALIDATION: "Enter the UPI reference number (UTR) exactly as your payment app shows it",
+  NOT_FOUND: "This payment could not be found.",
+  INVALID_STATE: "This payment has already been checked by the gym.",
+};
+
+/** The member records their UPI reference. Status stays Pending — only the owner can verify. */
+export async function claimRenewalPayment(memberId: string, input: unknown): Promise<ActionResult<void>> {
+  const parsed = claimPaymentSchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+  const { data, error } = await createServiceClient().rpc("claim_renewal_payment", {
+    p_payment_id: parsed.data.paymentId,
+    p_member_id: memberId,
+    p_reference: parsed.data.reference,
+  });
+  if (error || !data) return { ok: false, error: { code: "INVALID_STATE", message: "We couldn't save your reference. Please try again." } };
+  if (!data.ok) return { ok: false, error: { code: data.code, message: CLAIM_ERRORS[data.code] } };
+  return { ok: true, data: undefined };
+}
+
+export const verifyInputSchema = z.object({
+  paymentId: z.string().uuid("This payment could not be found"),
+  providerRef: z
+    .string({ required_error: "Enter the UPI reference you see in your bank app" })
+    .trim()
+    .min(4, "Enter the UPI reference you see in your bank app")
+    .max(40, "Keep the reference under 40 characters"),
+});
+
+export const rejectInputSchema = z.object({
+  paymentId: z.string().uuid("This payment could not be found"),
+  reason: z
+    .string({ required_error: "Enter why this payment is being rejected" })
+    .trim()
+    .min(3, "Enter why this payment is being rejected")
+    .max(200, "Keep the reason under 200 characters"),
+});

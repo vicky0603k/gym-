@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { CalendarCheck, ChevronRight, History, UserX } from "lucide-react";
+import { CalendarCheck, ChevronRight, History, ReceiptIndianRupee, UserX } from "lucide-react";
 import type { Attendance } from "@/services/supabase/database.types";
 import type { MembershipWithPlan } from "@/services/members";
 import type { MemberCase } from "@/services/red-list";
+import type { PaymentDetail } from "@/services/payments";
+import { paymentLabel } from "@/services/payment-labels";
+import { formatRupees } from "@/utils/money";
 import { CHANNEL_LABELS, OUTCOME_LABELS } from "@/utils/follow-up-labels";
 import { daysUntilKolkata, formatDisplayDate, formatDisplayDateTime, toKolkataDateString } from "@/utils/dates";
 import { StatusBadge } from "@/components/status-badge";
@@ -174,6 +177,36 @@ export function RedListHistory({ cases }: { cases: MemberCase[] }) {
                 ))}
               </ul>
             )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Renewal payments with links to receipts (Paid) or their status. */
+export function PaymentsSection({ payments }: { payments: PaymentDetail[] }) {
+  if (payments.length === 0) return null;
+  return (
+    <section className="card p-5">
+      <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+        <ReceiptIndianRupee className="h-4 w-4 text-muted" aria-hidden /> Payments
+      </h2>
+      <ul className="divide-y divide-border">
+        {payments.map((p) => (
+          <li key={p.id}>
+            <Link href={`/owner/payments/${p.id}`} className="flex items-center justify-between gap-3 py-3 min-h-[56px]">
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground">
+                  {p.planName} · {formatRupees(p.amount)}
+                </span>
+                <span className="block text-xs text-muted">
+                  {formatDisplayDate(toKolkataDateString(p.verifiedAt ?? p.createdAt))}
+                  {p.newExpiry && ` · valid till ${formatDisplayDate(p.newExpiry)}`}
+                </span>
+              </span>
+              <StatusBadge status={paymentLabel(p)} />
+            </Link>
           </li>
         ))}
       </ul>

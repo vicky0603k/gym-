@@ -1,22 +1,22 @@
 import { redirect } from "next/navigation";
-import { LayoutDashboard, QrCode, Settings, UserCheck, UserX, Users } from "lucide-react";
+import { IndianRupee, LayoutDashboard, Settings, UserCheck, UserX, Users } from "lucide-react";
 import { getCurrentStaff } from "@/services/auth";
 import { LogoutButton } from "@/components/logout-button";
 import { NavLink } from "@/components/nav-link";
 
 /**
  * Owner layout — mobile: bottom bar; desktop: side bar (expanded).
- * A section is listed only once its screen exists (Renewals, Add-ons come later).
+ * A section is listed only once its screen exists (Add-ons come later).
  * Settings is Owner-only (front desk has no settings access); Plans live under Settings.
- * Gate QR opens full screen over this layout.
+ * Gate QR opens full screen over this layout, from the Check-in page.
  */
 
 const navItems = [
   { href: "/owner", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/owner/red-list", label: "Red List", icon: UserX, exact: false },
   { href: "/owner/members", label: "Members", icon: Users, exact: false },
+  { href: "/owner/renewals", label: "Renewals", icon: IndianRupee, exact: false },
   { href: "/owner/check-in", label: "Check-in", icon: UserCheck, exact: false },
-  { href: "/owner/qr", label: "Gate QR", icon: QrCode, exact: false },
   { href: "/owner/settings", label: "Settings", icon: Settings, exact: false, ownerOnly: true },
 ];
 

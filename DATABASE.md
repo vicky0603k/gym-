@@ -130,6 +130,7 @@ Append-only contact history for a case.
 | discount | int | ₹ discount applied |
 | payment_id | uuid FK → payments | |
 | status | enum | `Pending, Paid, Failed, Cancelled` |
+| new_expiry | date | Nullable; set once by `verify_payment` so the receipt keeps the expiry this renewal produced (migration 009) |
 
 ### addons
 | Column | Type | Notes |

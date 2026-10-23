@@ -6,6 +6,9 @@ const TONE: Record<string, string> = {
   Frozen: "bg-warning/10 text-warning",
   Pending: "bg-surface-2 text-muted",
   Inactive: "bg-surface-2 text-muted",
+  Paid: "bg-accent/10 text-accent",
+  "Awaiting confirmation": "bg-warning/10 text-warning",
+  Replaced: "bg-surface-2 text-muted",
 };
 
 /** Member, membership or plan status pill. A Frozen membership reads "Paused" to people. */

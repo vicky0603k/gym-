@@ -4,10 +4,11 @@ import { ArrowLeft, Pencil, Phone } from "lucide-react";
 import { getCurrentStaff } from "@/services/auth";
 import { getMemberDetail } from "@/services/members";
 import { getMemberCases } from "@/services/red-list";
+import { listMemberPayments } from "@/services/payments";
 import { formatDisplayDate } from "@/utils/dates";
 import { formatPhone } from "@/utils/phone";
 import { StatusBadge } from "@/components/status-badge";
-import { CurrentMembership, MembershipHistory, RecentVisits, RedListHistory } from "./sections";
+import { CurrentMembership, MembershipHistory, PaymentsSection, RecentVisits, RedListHistory } from "./sections";
 import { StatusDialog } from "./status-dialog";
 
 export const metadata = { title: "Member" };
@@ -15,7 +16,7 @@ export const metadata = { title: "Member" };
 export default async function MemberDetailPage({ params }: { params: { id: string } }) {
   const [staff, detail] = await Promise.all([getCurrentStaff(), getMemberDetail(params.id)]);
   if (!detail) notFound();
-  const cases = await getMemberCases(detail.member.id);
+  const [cases, payments] = await Promise.all([getMemberCases(detail.member.id), listMemberPayments(detail.member.id)]);
   const { member, current } = detail;
   const isOwner = staff?.role === "Owner";
   const paused = current?.status === "Frozen";
@@ -68,6 +69,7 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
       </section>
 
       <RecentVisits memberId={member.id} visits={detail.recentVisits} lastVisit={detail.lastVisit} />
+      <PaymentsSection payments={payments} />
       <RedListHistory cases={cases} />
       <MembershipHistory history={detail.history} />
     </div>

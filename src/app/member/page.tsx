@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock, IdCard, ScanLine } from "lucide-react";
+import { CalendarClock, CreditCard, IdCard, ScanLine } from "lucide-react";
 import { requireMember } from "@/services/auth";
 import { getMemberHome } from "@/services/members";
 import { getWeeklyGoalState } from "@/services/streak";
@@ -10,7 +10,7 @@ import { WeeklyGoalCard } from "./weekly-goal-card";
 
 /**
  * Member home — real current plan, exact expiry date and the weekly goal.
- * The renew link appears with its screen.
+ * A renew prompt appears from 7 days before expiry (member reminder stage, ADR-009).
  */
 export default async function MemberHomePage() {
   const { memberId } = await requireMember();
@@ -64,6 +64,16 @@ export default async function MemberHomePage() {
         </div>
       </div>
       <p className="text-xs text-muted mt-3 mb-4">Started {formatDisplayDate(membership.start_date)}. Only you can see this.</p>
+
+      {membership.status !== "Frozen" && daysLeft <= 7 && (
+        <Link href="/member/renew" className="card mb-4 flex items-center gap-3 border-warning/40 p-4 min-h-[64px]">
+          <CreditCard className="h-6 w-6 shrink-0 text-warning" aria-hidden />
+          <span className="flex-1">
+            <span className="block font-semibold text-foreground">{expired ? "Renew to keep training" : "Time to renew"}</span>
+            <span className="block text-sm text-muted">See plans and the final amount to pay</span>
+          </span>
+        </Link>
+      )}
 
       <WeeklyGoalCard goal={goal} />
 

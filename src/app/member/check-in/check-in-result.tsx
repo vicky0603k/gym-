@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -15,7 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { CheckInResult } from "@/services/attendance";
-import { formatDisplayDate, formatDisplayTime } from "@/utils/dates";
+import { formatDisplayTime } from "@/utils/dates";
 import { cn } from "@/utils/cn";
 
 type Screen = { icon: LucideIcon; tone: string; title: string; message: string; scanAgain?: boolean };
@@ -56,7 +55,6 @@ function screenFor(result: CheckInResult | "offline"): Screen {
 
 /** Full-screen result: icon, one-line message, next action. */
 export function CheckInResultScreen({ result, onScanAgain }: { result: CheckInResult | "offline"; onScanAgain: () => void }) {
-  const [showRenew, setShowRenew] = useState(false);
   const s = screenFor(result);
   const expired = result !== "offline" && !result.ok && result.error.code === "MEMBERSHIP_EXPIRED" ? result.error : null;
 
@@ -77,30 +75,18 @@ export function CheckInResultScreen({ result, onScanAgain }: { result: CheckInRe
         </div>
       )}
 
-      {expired && showRenew && (
-        <div className="mt-6 w-full max-w-xs card p-4 text-left">
-          <p className="font-semibold text-foreground">Renew at the front desk</p>
-          <p className="mt-1 text-sm text-muted">
-            {expired.expiryDate
-              ? `Your membership expired on ${formatDisplayDate(expired.expiryDate)}. `
-              : "You don't have an active membership. "}
-            Show this screen at the front desk and they will renew it for you.
-          </p>
-        </div>
-      )}
-
       <div className="mt-8 flex w-full max-w-xs flex-col gap-3">
-        {expired && !showRenew && (
-          <button type="button" className="btn-primary" onClick={() => setShowRenew(true)}>
-            Renew
-          </button>
+        {expired && (
+          <Link href="/member/renew" className="btn-primary">
+            Renew now
+          </Link>
         )}
         {s.scanAgain && (
           <button type="button" className="btn-primary" onClick={onScanAgain}>
             Scan again
           </button>
         )}
-        <Link href="/member" className={s.scanAgain || (expired && !showRenew) ? "btn-secondary" : "btn-primary"}>
+        <Link href="/member" className={s.scanAgain || expired ? "btn-secondary" : "btn-primary"}>
           {result !== "offline" && result.ok ? "Done" : "Back to home"}
         </Link>
       </div>

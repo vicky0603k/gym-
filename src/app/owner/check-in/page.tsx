@@ -1,4 +1,5 @@
-import { Search, SearchX, UserSearch } from "lucide-react";
+import Link from "next/link";
+import { QrCode, Search, SearchX, UserSearch } from "lucide-react";
 import { listMembers } from "@/services/members";
 import { formatDisplayDate } from "@/utils/dates";
 import { formatPhone } from "@/utils/phone";
@@ -17,7 +18,12 @@ export default async function AssistedCheckInPage({ searchParams }: { searchPara
 
   return (
     <div className="p-4 md:p-6 max-w-3xl">
-      <h1 className="text-2xl font-bold text-foreground mb-1">Assisted check-in</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+        <h1 className="text-2xl font-bold text-foreground">Assisted check-in</h1>
+        <Link href="/owner/qr" className="btn-secondary inline-flex items-center gap-2 text-sm">
+          <QrCode className="h-4 w-4" aria-hidden /> Show gate QR
+        </Link>
+      </div>
       <p className="text-sm text-muted mb-4">For members who can&apos;t scan the gate QR.</p>
 
       <form method="get" role="search" className="flex gap-2 mb-4">

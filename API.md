@@ -32,7 +32,8 @@ Runs the daily scan (Red List) and builds renewal reminder + follow-ups-due list
 | `checkIn` | qr token | Runs the full gate flow (`ARCHITECTURE.md` 3.1). Possible results: success (+ weekly goal), or `DUPLICATE_CHECKIN / QR_EXPIRED / QR_INVALID / MEMBERSHIP_EXPIRED / MEMBERSHIP_PAUSED / MEMBER_BLOCKED / MEMBER_CANCELLED`. Member status is checked before the membership row. QR and assisted check-in both run the `check_in()` database function (migration 007): one transaction under a per-member advisory lock, so two quick scans can never both pass the duplicate guard. |
 | `getMyHome` | — | Plan, expiry, weekly goal (completed/target), open renewal prompt if within the reminder window. |
 | `getMyAttendance` | page | Own attendance history, newest first. |
-| `createRenewalOrder` | plan_id | Creates renewal order + payment in `Pending`; returns order, final payable amount, UPI instructions. |
+| `createRenewalOrder` | plan_id | Creates renewal order + payment in `Pending` in one transaction (`create_renewal_order()`, migration 009); returns order, final payable amount, UPI instructions. A repeat tap returns the same order; picking another plan before paying replaces the unpaid one (marked Cancelled/Failed, never deleted). |
+| `claimRenewalPayment` | payment_id, UPI reference | Member records the UTR from their UPI app. Status stays `Pending` — only `verifyPayment` makes it Paid. |
 | `getMyReceipt` | payment_id | Receipt data for a Paid payment (own payments only). |
 | `listAddons` | — | Active add-ons with live stock/availability. |
 | `createAddonOrder` | addon_id, qty | Stock/availability checked first (`OUT_OF_STOCK`, `TRAINER_UNAVAILABLE`); creates order + Pending payment. Never pre-selected — always an explicit member action. |
