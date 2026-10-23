@@ -78,6 +78,8 @@ export type Member = {
   join_date: string;
   marketing_consent: boolean;
   notes: string | null;
+  pin_failed_attempts: number;
+  pin_locked_until: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -264,7 +266,7 @@ export type Database = {
         Row: Member;
         Insert: Omit<
           Member,
-          "id" | "created_at" | "updated_at" | "pin_hash" | "assigned_trainer_id" | "notes" | "status" | "weekly_target" | "join_date" | "marketing_consent"
+          "id" | "created_at" | "updated_at" | "pin_hash" | "assigned_trainer_id" | "notes" | "status" | "weekly_target" | "join_date" | "marketing_consent" | "pin_failed_attempts" | "pin_locked_until"
         > & {
           id?: string;
           pin_hash?: string;
@@ -468,7 +470,12 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      verify_member_pin: {
+        Args: { p_phone: string; p_pin_hash: string };
+        Returns: string | null;
+      };
+    };
     Enums: {
       member_status: MemberStatus;
       membership_status: MembershipStatus;

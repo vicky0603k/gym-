@@ -1,21 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { useFormState, useFormStatus } from "react-dom";
 import Link from "next/link";
+import { memberLoginAction, staffLoginAction } from "./actions";
 
 /**
  * Shared login entry. Two modes:
  *   - Owner/Staff: email + password (Supabase Auth)
  *   - Member: phone + 4-digit PIN
- *
- * Module 1 shell — auth logic comes in Module 2.
+ * Inputs are re-validated with Zod on the server (services/auth.ts).
  */
 export default function LoginPage() {
   const [tab, setTab] = useState<"member" | "staff">("member");
-  const [phone, setPhone] = useState("");
-  const [pin, setPin] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [memberState, memberAction] = useFormState(memberLoginAction, null);
+  const [staffState, staffAction] = useFormState(staffLoginAction, null);
+  const error = tab === "member" ? memberState?.ok === false && memberState.error : staffState?.ok === false && staffState.error;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6">
@@ -30,43 +30,39 @@ export default function LoginPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 bg-surface rounded-lg p-1">
-          <button
-            className={`flex-1 py-2 rounded-md text-sm font-semibold transition-colors ${
-              tab === "member"
-                ? "bg-accent text-accent-foreground"
-                : "text-muted"
-            }`}
-            onClick={() => setTab("member")}
-          >
-            Member
-          </button>
-          <button
-            className={`flex-1 py-2 rounded-md text-sm font-semibold transition-colors ${
-              tab === "staff"
-                ? "bg-accent text-accent-foreground"
-                : "text-muted"
-            }`}
-            onClick={() => setTab("staff")}
-          >
-            Owner / Staff
-          </button>
+          {(["member", "staff"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={tab === t}
+              className={`flex-1 py-2 min-h-[44px] rounded-md text-sm font-semibold transition-colors ${
+                tab === t ? "bg-accent text-accent-foreground" : "text-muted"
+              }`}
+              onClick={() => setTab(t)}
+            >
+              {t === "member" ? "Member" : "Owner / Staff"}
+            </button>
+          ))}
         </div>
 
         {tab === "member" ? (
-          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <form key="member" action={memberAction} className="space-y-4">
             <div>
               <label className="label" htmlFor="phone">
-                Phone number
+                Mobile number
               </label>
               <input
                 id="phone"
+                name="phone"
                 type="tel"
                 inputMode="numeric"
+                autoComplete="tel-national"
+                required
+                pattern="[6-9][0-9]{9}"
                 maxLength={10}
                 placeholder="10-digit mobile number"
                 className="input"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                onInput={(e) => (e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""))}
               />
             </div>
             <div>
@@ -75,32 +71,37 @@ export default function LoginPage() {
               </label>
               <input
                 id="pin"
+                name="pin"
                 type="password"
                 inputMode="numeric"
+                autoComplete="current-password"
+                required
+                pattern="[0-9]{4}"
                 maxLength={4}
                 placeholder="••••"
                 className="input"
-                value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                onInput={(e) => (e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ""))}
               />
             </div>
-            <button type="submit" className="btn-primary w-full">
-              Check In
-            </button>
+            <ErrorMessage message={error ? error.message : null} />
+            <SubmitButton label="Log in" />
+            <p className="text-xs text-muted text-center">
+              Forgot your PIN? Ask the front desk to reset it.
+            </p>
           </form>
         ) : (
-          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <form key="staff" action={staffAction} className="space-y-4">
             <div>
               <label className="label" htmlFor="email">
                 Email
               </label>
               <input
                 id="email"
+                name="email"
                 type="email"
-                placeholder="owner@gym.demo"
+                autoComplete="username"
+                required
                 className="input"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div>
@@ -109,16 +110,15 @@ export default function LoginPage() {
               </label>
               <input
                 id="password"
+                name="password"
                 type="password"
-                placeholder="••••••••"
+                autoComplete="current-password"
+                required
                 className="input"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            <button type="submit" className="btn-primary w-full">
-              Login to Dashboard
-            </button>
+            <ErrorMessage message={error ? error.message : null} />
+            <SubmitButton label="Log in to dashboard" />
           </form>
         )}
 
@@ -130,11 +130,24 @@ export default function LoginPage() {
             ← Back to home
           </Link>
         </div>
-
-        <p className="mt-4 text-xs text-muted text-center">
-          Demo members: phone 9000020001–0030, PIN 1234
-        </p>
       </div>
     </div>
+  );
+}
+
+function SubmitButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" className="btn-primary w-full" disabled={pending} aria-busy={pending}>
+      {pending ? "Logging in…" : label}
+    </button>
+  );
+}
+
+function ErrorMessage({ message }: { message: string | null }) {
+  return (
+    <p role="alert" aria-live="assertive" className="text-sm text-danger empty:hidden">
+      {message}
+    </p>
   );
 }

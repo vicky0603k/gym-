@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/utils/cn";
+import { LogoutButton } from "@/components/logout-button";
 
 /**
  * Member layout — bottom navigation: Home, Check-in, Add-ons, More.
@@ -20,6 +21,9 @@ export default function MemberLayout({
 }) {
   return (
     <div className="min-h-screen flex flex-col">
+      <header className="flex justify-end px-4 pt-2 max-w-md w-full mx-auto">
+        <LogoutButton />
+      </header>
       <main className="flex-1 pb-16">{children}</main>
 
       {/* Bottom navigation */}

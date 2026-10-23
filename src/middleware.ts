@@ -34,18 +34,16 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Owner/staff routes require a staff auth session
-  if (pathname.startsWith("/owner")) {
-    if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-  }
+  // member_id lives in app_metadata, which only the server can set (see services/auth.ts).
+  const isMember = Boolean(user?.app_metadata?.member_id);
 
-  // Member routes require either a member session or a staff session (for assisted flows)
-  if (pathname.startsWith("/member")) {
-    if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
+  // /member/* needs a member session; /owner/* needs a non-member session
+  // (the owner layout then confirms a staff_users row via getCurrentStaff).
+  if (pathname.startsWith("/member") && !isMember) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+  if (pathname.startsWith("/owner") && (!user || isMember)) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return supabaseResponse;

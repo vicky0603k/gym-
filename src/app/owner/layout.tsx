@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { cn } from "@/utils/cn";
+import { getCurrentStaff } from "@/services/auth";
+import { LogoutButton } from "@/components/logout-button";
 
 /**
  * Owner layout — navigation: Dashboard, Red List, Members, Renewals, Add-ons, Settings.
@@ -15,11 +18,15 @@ const navItems = [
   { href: "/owner/settings", label: "Settings", icon: "⚙️" },
 ];
 
-export default function OwnerLayout({
+export default async function OwnerLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Middleware only knows "signed in"; a staff_users row is what makes someone staff.
+  const staff = await getCurrentStaff();
+  if (!staff) redirect("/login");
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* Desktop sidebar */}
@@ -45,7 +52,18 @@ export default function OwnerLayout({
             </Link>
           ))}
         </nav>
+        <div className="mt-auto pt-4 border-t border-border">
+          <p className="px-3 text-sm text-foreground truncate">{staff.name}</p>
+          <p className="px-3 text-xs text-muted mb-2">{staff.role === "Owner" ? "Owner" : "Front desk"}</p>
+          <LogoutButton className="w-full text-left" />
+        </div>
       </aside>
+
+      {/* Mobile top bar */}
+      <header className="md:hidden flex items-center justify-between px-4 pt-2 border-b border-border">
+        <span className="text-sm text-foreground truncate">{staff.name}</span>
+        <LogoutButton />
+      </header>
 
       {/* Main content */}
       <main className="flex-1 pb-16 md:pb-0">
