@@ -1,0 +1,347 @@
+/**
+ * Members service — owner member management (list, detail, add, edit,
+ * pause/resume) and the member's own home card.
+ * All dates come from src/utils/dates.ts (Asia/Kolkata).
+ */
+import { z } from "zod";
+import { createServiceClient } from "./supabase/server";
+import { hashPin } from "./auth";
+import { pauseMembership, resumeMembership, validationError } from "./memberships";
+import { getAttendanceHistory, getLastCheckinDate } from "./attendance";
+import { computeNewExpiry, todayKolkata } from "@/utils/dates";
+import type { ActionResult } from "./payments";
+import type { Attendance, Member, MemberStatus, Membership } from "./supabase/database.types";
+
+export const MEMBER_STATUSES = ["Active", "Paused", "Expired", "Cancelled", "Blocked"] as const;
+
+// shortcut: the list shows at most this many rows; add paging when a gym passes it.
+export const MEMBER_LIST_LIMIT = 500;
+
+const memberFields = {
+  name: z.string().trim().min(2, "Enter the member's full name").max(80, "Keep the name under 80 characters"),
+  phone: z.string().trim().regex(/^[6-9]\d{9}$/, "Enter a 10-digit mobile number"),
+  weeklyTarget: z.coerce
+    .number({ invalid_type_error: "Enter a weekly target between 1 and 7 visits" })
+    .int("Enter a weekly target between 1 and 7 visits")
+    .min(1, "Enter a weekly target between 1 and 7 visits")
+    .max(7, "Enter a weekly target between 1 and 7 visits"),
+  // "" from the "No trainer" option means none.
+  trainerId: z.preprocess(
+    (v) => (v === "" || v === undefined ? null : v),
+    z.string().uuid("Choose a trainer from the list").nullable()
+  ),
+};
+
+export const createMemberSchema = z.object({
+  ...memberFields,
+  pin: z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN"),
+  planId: z.string().uuid("Choose a plan"),
+});
+
+export const updateMemberSchema = z.object(memberFields);
+
+export const pauseMemberSchema = z.object({
+  reason: z.string({ required_error: "Enter a reason for the pause" }).trim().min(3, "Enter a reason for the pause"),
+});
+
+const DUPLICATE_PHONE = "This mobile number already belongs to another member.";
+const SAVE_FAILED = {
+  ok: false as const,
+  error: { code: "INVALID_STATE", message: "We couldn't save this member. Please try again." },
+};
+
+function duplicatePhone() {
+  return { ok: false as const, error: { code: "VALIDATION", message: DUPLICATE_PHONE, fields: { phone: DUPLICATE_PHONE } } };
+}
+
+const MEMBER_COLUMNS =
+  "id, name, phone, status, assigned_trainer_id, weekly_target, join_date, created_at, updated_at";
+
+export type MemberProfile = Pick<
+  Member,
+  "id" | "name" | "phone" | "status" | "assigned_trainer_id" | "weekly_target" | "join_date" | "created_at" | "updated_at"
+>;
+export type MembershipWithPlan = Membership & { planName: string };
+
+export interface MemberListRow {
+  id: string;
+  name: string;
+  phone: string;
+  status: MemberStatus;
+  planName: string | null;
+  expiryDate: string | null;
+}
+
+async function planNames(): Promise<Map<string, string>> {
+  const { data, error } = await createServiceClient().from("plans").select("id, name");
+  if (error) throw new Error("PLANS_LOAD_FAILED");
+  return new Map(data.map((p) => [p.id, p.name]));
+}
+
+/** Latest non-cancelled membership per member (the one the owner and member care about). */
+async function currentMemberships(memberIds: string[]): Promise<Map<string, Membership>> {
+  const supabase = createServiceClient();
+  const current = new Map<string, Membership>();
+  // Chunked so the id list never overflows the request URL.
+  for (let i = 0; i < memberIds.length; i += 100) {
+    const { data, error } = await supabase
+      .from("memberships")
+      .select("*")
+      .in("member_id", memberIds.slice(i, i + 100))
+      .neq("status", "Cancelled")
+      .order("expiry_date", { ascending: false });
+    if (error) throw new Error("MEMBERSHIPS_LOAD_FAILED");
+    for (const m of data) if (!current.has(m.member_id)) current.set(m.member_id, m);
+  }
+  return current;
+}
+
+/** Owner members list. Search matches name or phone. Throws on a database error. */
+export async function listMembers(filters: { search?: string; status?: string }): Promise<MemberListRow[]> {
+  let query = createServiceClient()
+    .from("members")
+    .select("id, name, phone, status")
+    .order("name", { ascending: true })
+    .limit(MEMBER_LIST_LIMIT);
+
+  // Keep only characters that are safe inside a PostgREST or() filter.
+  const term = (filters.search ?? "").replace(/[^\p{L}\p{N} '-]/gu, "").trim();
+  if (term) {
+    const digits = term.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+    query = query.or(
+      digits.length >= 3 ? `name.ilike.%${term}%,phone.ilike.%${digits}%` : `name.ilike.%${term}%`
+    );
+  }
+  const status = MEMBER_STATUSES.find((s) => s === filters.status);
+  if (status) query = query.eq("status", status);
+
+  const { data: members, error } = await query;
+  if (error) throw new Error("MEMBERS_LOAD_FAILED");
+  if (!members.length) return [];
+
+  const [names, current] = await Promise.all([planNames(), currentMemberships(members.map((m) => m.id))]);
+  return members.map((m) => {
+    const ms = current.get(m.id);
+    return {
+      ...m,
+      planName: ms ? names.get(ms.plan_id) ?? null : null,
+      expiryDate: ms?.expiry_date ?? null,
+    };
+  });
+}
+
+export interface MemberDetail {
+  member: MemberProfile;
+  trainerName: string | null;
+  current: MembershipWithPlan | null;
+  history: MembershipWithPlan[];
+  recentVisits: Attendance[];
+  lastVisit: string | null;
+}
+
+/** Everything the owner's member detail screen shows. Null when the member does not exist. */
+export async function getMemberDetail(memberId: string): Promise<MemberDetail | null> {
+  if (!z.string().uuid().safeParse(memberId).success) return null;
+  const supabase = createServiceClient();
+
+  const { data: member, error } = await supabase
+    .from("members")
+    .select(MEMBER_COLUMNS)
+    .eq("id", memberId)
+    .maybeSingle();
+  if (error) throw new Error("MEMBER_LOAD_FAILED");
+  if (!member) return null;
+
+  const [names, memberships, trainer, recentVisits, lastVisit] = await Promise.all([
+    planNames(),
+    supabase.from("memberships").select("*").eq("member_id", memberId).order("start_date", { ascending: false }),
+    member.assigned_trainer_id
+      ? supabase.from("trainers").select("name").eq("id", member.assigned_trainer_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    getAttendanceHistory(memberId, 0, 10),
+    getLastCheckinDate(memberId),
+  ]);
+  if (memberships.error) throw new Error("MEMBERSHIPS_LOAD_FAILED");
+
+  const history = memberships.data.map((m) => ({ ...m, planName: names.get(m.plan_id) ?? "Plan removed" }));
+  const current =
+    [...history].sort((a, b) => b.expiry_date.localeCompare(a.expiry_date)).find((m) => m.status !== "Cancelled") ??
+    null;
+
+  return { member, trainerName: trainer.data?.name ?? null, current, history, recentVisits, lastVisit };
+}
+
+/** Member profile for the edit form. */
+export async function getMemberProfile(memberId: string): Promise<MemberProfile | null> {
+  if (!z.string().uuid().safeParse(memberId).success) return null;
+  const { data, error } = await createServiceClient()
+    .from("members")
+    .select(MEMBER_COLUMNS)
+    .eq("id", memberId)
+    .maybeSingle();
+  if (error) throw new Error("MEMBER_LOAD_FAILED");
+  return data;
+}
+
+export async function listActiveTrainers(): Promise<{ id: string; name: string; specialisation: string | null }[]> {
+  const { data, error } = await createServiceClient()
+    .from("trainers")
+    .select("id, name, specialisation")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+  if (error) throw new Error("TRAINERS_LOAD_FAILED");
+  return data;
+}
+
+/**
+ * Add a member and their first membership: start = today (Kolkata),
+ * expiry = start + plan duration. The PIN is stored only as hashPin().
+ */
+export async function createMember(
+  input: unknown,
+  staffId: string
+): Promise<ActionResult<{ memberId: string; planName: string; expiryDate: string }>> {
+  const parsed = createMemberSchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+  const { name, phone, pin, weeklyTarget, trainerId, planId } = parsed.data;
+
+  const supabase = createServiceClient();
+  const { data: plan } = await supabase
+    .from("plans")
+    .select("id, name, duration_days")
+    .eq("id", planId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!plan) {
+    const message = "This plan is no longer offered. Choose another plan.";
+    return { ok: false, error: { code: "VALIDATION", message, fields: { planId: message } } };
+  }
+
+  const startDate = todayKolkata();
+  const { data: member, error } = await supabase
+    .from("members")
+    .insert({
+      name,
+      phone,
+      pin_hash: hashPin(pin),
+      weekly_target: weeklyTarget,
+      assigned_trainer_id: trainerId,
+      join_date: startDate,
+    })
+    .select("id")
+    .single();
+  if (error?.code === "23505") return duplicatePhone();
+  if (error || !member) return SAVE_FAILED;
+
+  const expiryDate = computeNewExpiry(startDate, plan.duration_days);
+  const { error: membershipError } = await supabase.from("memberships").insert({
+    member_id: member.id,
+    plan_id: plan.id,
+    start_date: startDate,
+    expiry_date: expiryDate,
+    status: "Active",
+    renewal_source: "Joining",
+  });
+  if (membershipError) {
+    // The member row is brand new and has no history yet, so removing it is safe.
+    await supabase.from("members").delete().eq("id", member.id);
+    return SAVE_FAILED;
+  }
+
+  await supabase.from("audit_logs").insert({
+    actor_type: "Staff",
+    actor_id: staffId,
+    action: "member.created",
+    record_type: "member",
+    record_id: member.id,
+    summary: `Member ${name} added on ${plan.name}, ${startDate} to ${expiryDate}.`,
+  });
+
+  return { ok: true, data: { memberId: member.id, planName: plan.name, expiryDate } };
+}
+
+/** Edit name, phone, trainer and weekly target. */
+export async function updateMember(memberId: string, input: unknown, staffId: string): Promise<ActionResult<void>> {
+  const parsed = updateMemberSchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+  const { name, phone, weeklyTarget, trainerId } = parsed.data;
+
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("members")
+    .update({ name, phone, weekly_target: weeklyTarget, assigned_trainer_id: trainerId })
+    .eq("id", memberId)
+    .select("id");
+  if (error?.code === "23505") return duplicatePhone();
+  if (error) return SAVE_FAILED;
+  if (!data?.length) return { ok: false, error: { code: "NOT_FOUND", message: "This member no longer exists." } };
+
+  await supabase.from("audit_logs").insert({
+    actor_type: "Staff",
+    actor_id: staffId,
+    action: "member.updated",
+    record_type: "member",
+    record_id: memberId,
+    summary: `Member details updated: ${name}, ${phone}, target ${weeklyTarget}/week.`,
+  });
+  return { ok: true, data: undefined };
+}
+
+/** Pause the member's active membership. A reason is mandatory. */
+export async function pauseMember(memberId: string, input: unknown, staffId: string): Promise<ActionResult<void>> {
+  const parsed = pauseMemberSchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+
+  const { data: membership, error } = await createServiceClient()
+    .from("memberships")
+    .select("id, expiry_date")
+    .eq("member_id", memberId)
+    .eq("status", "Active")
+    .order("expiry_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return SAVE_FAILED;
+  if (!membership || membership.expiry_date < todayKolkata()) {
+    return { ok: false, error: { code: "INVALID_STATE", message: "Only a member with a running membership can be paused." } };
+  }
+
+  return pauseMembership({ membershipId: membership.id, memberId, reason: parsed.data.reason, staffId });
+}
+
+export async function resumeMember(memberId: string, staffId: string): Promise<ActionResult<void>> {
+  const { data: membership, error } = await createServiceClient()
+    .from("memberships")
+    .select("id")
+    .eq("member_id", memberId)
+    .eq("status", "Frozen")
+    .order("expiry_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return SAVE_FAILED;
+  if (!membership) return { ok: false, error: { code: "INVALID_STATE", message: "This member is not paused." } };
+
+  return resumeMembership({ membershipId: membership.id, memberId, staffId });
+}
+
+export interface MemberHome {
+  name: string;
+  membership: MembershipWithPlan | null;
+}
+
+/** The signed-in member's own card: real plan name and exact expiry. */
+export async function getMemberHome(memberId: string): Promise<MemberHome | null> {
+  const { data: member, error } = await createServiceClient()
+    .from("members")
+    .select("id, name")
+    .eq("id", memberId)
+    .maybeSingle();
+  if (error) throw new Error("MEMBER_LOAD_FAILED");
+  if (!member) return null;
+
+  const [names, current] = await Promise.all([planNames(), currentMemberships([memberId])]);
+  const m = current.get(memberId);
+  return {
+    name: member.name,
+    membership: m ? { ...m, planName: names.get(m.plan_id) ?? "Membership" } : null,
+  };
+}

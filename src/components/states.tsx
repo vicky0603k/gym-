@@ -1,3 +1,4 @@
+import { AlertTriangle, Inbox } from "lucide-react";
 import { cn } from "@/utils/cn";
 
 /** Loading skeleton — shimmering placeholder block */
@@ -23,23 +24,26 @@ export function LoadingSkeleton({
   );
 }
 
-/** Empty state — used when a list has no items */
+/** Empty state — used when a list has no items, plus the next action */
 export function EmptyState({
-  icon = "🎉",
+  icon = <Inbox className="h-10 w-10" />,
   title,
   message,
+  action,
 }: {
-  icon?: string;
+  icon?: React.ReactNode;
   title: string;
   message?: string;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-      <span className="text-4xl mb-4" aria-hidden>
+      <span className="mb-4 text-muted" aria-hidden>
         {icon}
       </span>
       <h2 className="text-lg font-semibold text-foreground mb-2">{title}</h2>
       {message && <p className="text-sm text-muted max-w-xs">{message}</p>}
+      {action && <div className="mt-6">{action}</div>}
     </div>
   );
 }
@@ -56,9 +60,7 @@ export function ErrorState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-      <span className="text-4xl mb-4 text-danger" aria-hidden>
-        ⚠️
-      </span>
+      <AlertTriangle className="h-10 w-10 mb-4 text-danger" aria-hidden />
       <h2 className="text-lg font-semibold text-foreground mb-2">{title}</h2>
       <p className="text-sm text-muted max-w-xs mb-6">{message}</p>
       {action}

@@ -1,21 +1,18 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cn } from "@/utils/cn";
+import { LayoutDashboard, Tags, Users } from "lucide-react";
 import { getCurrentStaff } from "@/services/auth";
 import { LogoutButton } from "@/components/logout-button";
+import { NavLink } from "@/components/nav-link";
 
 /**
- * Owner layout — navigation: Dashboard, Red List, Members, Renewals, Add-ons, Settings.
- * Mobile: bottom bar; Desktop: side bar (expanded).
+ * Owner layout — mobile: bottom bar; desktop: side bar (expanded).
+ * A section is listed only once its screen exists (Red List, Renewals, Add-ons, Settings come later).
  */
 
 const navItems = [
-  { href: "/owner", label: "Dashboard", icon: "📊" },
-  { href: "/owner/red-list", label: "Red List", icon: "📋" },
-  { href: "/owner/members", label: "Members", icon: "👥" },
-  { href: "/owner/renewals", label: "Renewals", icon: "💳" },
-  { href: "/owner/add-ons", label: "Add-ons", icon: "🛒" },
-  { href: "/owner/settings", label: "Settings", icon: "⚙️" },
+  { href: "/owner", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { href: "/owner/members", label: "Members", icon: Users, exact: false },
+  { href: "/owner/plans", label: "Plans", icon: Tags, exact: false },
 ];
 
 export default async function OwnerLayout({
@@ -39,17 +36,15 @@ export default async function OwnerLayout({
         </div>
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => (
-            <Link
+            <NavLink
               key={item.href}
               href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-3 rounded-lg min-h-[48px]",
-                "text-muted hover:text-foreground hover:bg-surface-2 transition-colors"
-              )}
+              exact={item.exact}
+              className="flex items-center gap-3 px-3 py-3 rounded-lg min-h-[48px] hover:bg-surface-2 transition-colors"
             >
-              <span aria-hidden>{item.icon}</span>
+              <item.icon className="h-5 w-5" aria-hidden />
               <span className="text-sm font-medium">{item.label}</span>
-            </Link>
+            </NavLink>
           ))}
         </nav>
         <div className="mt-auto pt-4 border-t border-border">
@@ -74,17 +69,15 @@ export default async function OwnerLayout({
       <nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-40 md:hidden">
         <div className="flex justify-around items-stretch overflow-x-auto">
           {navItems.map((item) => (
-            <Link
+            <NavLink
               key={item.href}
               href={item.href}
-              className={cn(
-                "flex flex-col items-center justify-center gap-1 px-3 py-2 min-h-[56px] flex-1",
-                "text-muted hover:text-foreground transition-colors"
-              )}
+              exact={item.exact}
+              className="flex flex-col items-center justify-center gap-1 px-3 py-2 min-h-[56px] flex-1 transition-colors"
             >
-              <span className="text-lg" aria-hidden>{item.icon}</span>
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </Link>
+              <item.icon className="h-5 w-5" aria-hidden />
+              <span className="text-xs font-medium">{item.label}</span>
+            </NavLink>
           ))}
         </div>
       </nav>

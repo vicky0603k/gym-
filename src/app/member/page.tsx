@@ -1,50 +1,66 @@
+import { CalendarClock, IdCard } from "lucide-react";
+import { requireMember } from "@/services/auth";
+import { getMemberHome } from "@/services/members";
+import { daysUntilKolkata, formatDisplayDate } from "@/utils/dates";
+import { EmptyState } from "@/components/states";
+import { StatusBadge } from "@/components/status-badge";
+
 /**
- * Member home — membership card, weekly goal placeholder, quick actions.
- * Module 1 shell; real data wired in Module 2 (profile) and Module 4 (streak).
+ * Member home — the member's real current plan and exact expiry date.
+ * Weekly goal arrives in Phase 8; check-in and renew links appear with their screens.
  */
-export default function MemberHomePage() {
+export default async function MemberHomePage() {
+  const { memberId } = await requireMember();
+  const home = await getMemberHome(memberId);
+  const membership = home?.membership ?? null;
+
+  if (!membership) {
+    return (
+      <div className="px-6 py-6 max-w-md mx-auto">
+        <EmptyState
+          icon={<IdCard className="h-10 w-10" />}
+          title="No membership on file"
+          message="Please visit the front desk to start or renew your membership."
+        />
+      </div>
+    );
+  }
+
+  const daysLeft = daysUntilKolkata(membership.expiry_date);
+  const expired = daysLeft < 0;
+  const status = membership.status === "Active" && expired ? "Expired" : membership.status;
+
   return (
     <div className="px-6 py-6 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold text-foreground mb-6">My Gym</h1>
+      <p className="text-muted">Welcome back,</p>
+      <h1 className="text-2xl font-bold text-foreground mb-6">{home!.name}</h1>
 
-      {/* Membership card (placeholder) */}
-      <div className="card p-5 mb-4">
-        <div className="flex justify-between items-start mb-4">
+      <div className="card p-5">
+        <div className="flex justify-between items-start gap-3 mb-4">
           <div>
             <p className="text-sm text-muted">Current plan</p>
-            <p className="text-lg font-semibold text-foreground">Half-yearly</p>
+            <p className="text-lg font-semibold text-foreground">{membership.planName}</p>
           </div>
-          <span className="px-3 py-1 rounded-full bg-accent/10 text-accent text-xs font-semibold">
-            Active
-          </span>
+          <StatusBadge status={status} />
         </div>
-        <div className="border-t border-border pt-3">
-          <p className="text-sm text-muted">Expires on</p>
-          <p className="text-foreground font-medium">—</p>
-        </div>
-      </div>
-
-      {/* Weekly goal (placeholder) */}
-      <div className="card p-5 mb-4">
-        <p className="text-sm text-muted mb-2">This week&apos;s goal</p>
-        <div className="flex items-end gap-2 mb-3">
-          <span className="kpi-number">0</span>
-          <span className="text-muted text-lg pb-1">/ 4 visits</span>
-        </div>
-        <div className="w-full bg-surface-2 rounded-full h-3 overflow-hidden">
-          <div className="bg-accent h-full rounded-full" style={{ width: "0%" }} />
+        <div className="border-t border-border pt-3 flex items-start gap-3">
+          <CalendarClock className="h-5 w-5 text-muted mt-0.5" aria-hidden />
+          <div>
+            <p className="text-sm text-muted">{expired ? "Expired on" : "Valid till"}</p>
+            <p className="text-foreground font-semibold text-lg">{formatDisplayDate(membership.expiry_date)}</p>
+            <p className={expired || daysLeft <= 7 ? "text-sm text-warning" : "text-sm text-muted"}>
+              {membership.status === "Frozen"
+                ? `Paused since ${formatDisplayDate(membership.freeze_start ?? membership.start_date)}`
+                : expired
+                  ? "Please renew at the front desk to keep checking in."
+                  : daysLeft === 0
+                    ? "Last day today"
+                    : `${daysLeft} ${daysLeft === 1 ? "day" : "days"} left`}
+            </p>
+          </div>
         </div>
       </div>
-
-      {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <a href="/member/check-in" className="btn-primary text-sm text-center">
-          📳 Check in
-        </a>
-        <a href="/member/renew" className="btn-secondary text-sm text-center">
-          💳 Renew
-        </a>
-      </div>
+      <p className="text-xs text-muted mt-3">Started {formatDisplayDate(membership.start_date)}. Only you can see this.</p>
     </div>
   );
 }

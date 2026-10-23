@@ -13,7 +13,7 @@ import type { Payment, PaymentRpcErrorCode } from "./supabase/database.types";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: { code: string; message: string } };
+  | { ok: false; error: { code: string; message: string; fields?: Record<string, string> } };
 
 const PAYMENT_ERROR_MESSAGES: Record<Exclude<PaymentRpcErrorCode, "VALIDATION">, string> = {
   FORBIDDEN: "Only the owner can verify or reject payments.",

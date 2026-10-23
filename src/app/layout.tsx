@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const GYM_NAME = process.env.NEXT_PUBLIC_GYM_NAME ?? "Gym Retention PWA";
@@ -39,7 +40,10 @@ export default function RootLayout({
       <head>
         <link rel="manifest" href="/manifest.json" />
       </head>
-      <body className="min-h-screen bg-background">{children}</body>
+      <body className="min-h-screen bg-background">
+        {children}
+        <Toaster theme="dark" position="top-center" richColors />
+      </body>
     </html>
   );
 }
