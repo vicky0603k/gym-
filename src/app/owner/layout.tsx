@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
-import { IndianRupee, LayoutDashboard, Settings, UserCheck, UserX, Users } from "lucide-react";
+import { IndianRupee, LayoutDashboard, Settings, ShoppingBag, UserCheck, UserX, Users } from "lucide-react";
 import { getCurrentStaff } from "@/services/auth";
 import { LogoutButton } from "@/components/logout-button";
 import { NavLink } from "@/components/nav-link";
 
 /**
  * Owner layout — mobile: bottom bar; desktop: side bar (expanded).
- * A section is listed only once its screen exists (Add-ons come later).
+ * Mobile bottom bar holds six sections; Settings sits in the mobile top bar instead.
  * Settings is Owner-only (front desk has no settings access); Plans live under Settings.
  * Gate QR opens full screen over this layout, from the Check-in page.
  */
@@ -17,6 +17,7 @@ const navItems = [
   { href: "/owner/members", label: "Members", icon: Users, exact: false },
   { href: "/owner/renewals", label: "Renewals", icon: IndianRupee, exact: false },
   { href: "/owner/check-in", label: "Check-in", icon: UserCheck, exact: false },
+  { href: "/owner/add-ons", label: "Add-ons", icon: ShoppingBag, exact: false },
   { href: "/owner/settings", label: "Settings", icon: Settings, exact: false, ownerOnly: true },
 ];
 
@@ -63,7 +64,15 @@ export default async function OwnerLayout({
       {/* Mobile top bar */}
       <header className="md:hidden flex items-center justify-between px-4 pt-2 border-b border-border">
         <span className="text-sm text-foreground truncate">{staff.name}</span>
-        <LogoutButton />
+        <div className="flex items-center">
+          {staff.role === "Owner" && (
+            <NavLink href="/owner/settings" also={["/owner/plans"]} className="btn-ghost px-3">
+              <Settings className="h-5 w-5" aria-hidden />
+              <span className="sr-only">Settings</span>
+            </NavLink>
+          )}
+          <LogoutButton />
+        </div>
       </header>
 
       {/* Main content */}
@@ -74,7 +83,7 @@ export default async function OwnerLayout({
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-40 md:hidden">
         <div className="flex justify-around items-stretch overflow-x-auto">
-          {nav.map((item) => (
+          {nav.filter((item) => item.href !== "/owner/settings").map((item) => (
             <NavLink
               key={item.href}
               href={item.href}

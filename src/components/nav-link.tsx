@@ -4,20 +4,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/utils/cn";
 
-/** Navigation link that highlights itself for its section. `exact` for section roots. */
+/** Navigation link that highlights itself for its section. `exact` for section roots; `also` for sub-pages it owns. */
 export function NavLink({
   href,
   exact,
+  also = [],
   className,
   children,
 }: {
   href: string;
   exact?: boolean;
+  also?: string[];
   className?: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  const under = (p: string) => pathname === p || pathname.startsWith(`${p}/`);
+  const active = (exact ? pathname === href : under(href)) || also.some(under);
 
   return (
     <Link

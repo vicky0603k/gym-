@@ -1,6 +1,6 @@
 import type { PaymentDetail } from "@/services/payments";
 import { receiptNumber } from "@/services/payments";
-import { formatDisplayDate, formatDisplayDateTime, toKolkataDateString } from "@/utils/dates";
+import { addDaysToDate, formatDisplayDate, formatDisplayDateTime, toKolkataDateString } from "@/utils/dates";
 import { formatRupees } from "@/utils/money";
 import { formatPhone } from "@/utils/phone";
 
@@ -32,13 +32,21 @@ export function Receipt({ payment, gymName }: { payment: PaymentDetail; gymName:
 
       <dl className="divide-y divide-border">
         <Line label="Member" value={`${payment.memberName} · ${formatPhone(payment.memberPhone)}`} />
-        <Line label="Plan" value={`${payment.planName} · ${payment.durationDays} days`} />
+        {payment.purpose === "Renewal" ? (
+          <Line label="Plan" value={`${payment.planName} · ${payment.durationDays} days`} />
+        ) : (
+          <Line label="Item" value={payment.quantity > 1 ? `${payment.planName} × ${payment.quantity}` : payment.planName} />
+        )}
         {payment.discount > 0 && <Line label="Plan price" value={formatRupees(payment.baseAmount)} />}
         {payment.discount > 0 && <Line label="Discount" value={`− ${formatRupees(payment.discount)}`} />}
         <Line label="Amount paid" value={formatRupees(payment.amount)} strong />
         <Line label="UPI reference" value={payment.providerRef ?? "—"} />
         <Line label="Paid on" value={formatDisplayDateTime(paidOn)} />
         {payment.newExpiry && <Line label="Membership valid till" value={formatDisplayDate(payment.newExpiry)} strong />}
+        {payment.purpose === "AddOn" && payment.addonType !== "Product" && (
+          <Line label="Valid till" value={formatDisplayDate(addDaysToDate(toKolkataDateString(paidOn), payment.durationDays))} strong />
+        )}
+        {payment.addonType === "Product" && <Line label="Collection" value="At the front desk" />}
       </dl>
       <p className="mt-4 text-xs text-muted">
         Confirmed by {gymName} on {formatDisplayDate(toKolkataDateString(paidOn))}. Keep this receipt for your records.

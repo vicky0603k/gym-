@@ -32,7 +32,7 @@ describe("renewal stages (ADR-009)", () => {
   it("groups most urgent first with expected ₹ (pending amount wins over plan price)", () => {
     const row = (days: number, over: Partial<RenewalDueDbRow> = {}): RenewalDueDbRow => ({
       member_id: `m${days}`, member_name: "A", member_phone: "9876543210", plan_name: "Monthly", renewal_amount: 1000,
-      expiry_date: "2026-11-01", days_left: days, pending_payment_id: null, pending_amount: null, pending_reference: null, ...over,
+      expiry_date: "2026-11-01", days_left: days, pending_payment_id: null, pending_amount: null, pending_reference: null, notify_renewal: true, ...over,
     });
     const groups = groupRenewals([row(2), row(3, { pending_payment_id: "p", pending_amount: 2250 }), row(10), row(-2)]);
     expect(groups.map((g) => g.stage)).toEqual(["overdue", "0", "3", "7", "14"]);

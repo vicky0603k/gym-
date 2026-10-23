@@ -80,6 +80,8 @@ export type Member = {
   notes: string | null;
   pin_failed_attempts: number;
   pin_locked_until: string | null;
+  notify_renewal: boolean; // 010
+  notify_care: boolean; // 010
   created_at: string;
   updated_at: string;
 };
@@ -243,6 +245,11 @@ export type Settings = {
   duplicate_window_hours: number;
   renewal_windows: number[];
   weekly_goal_default: number;
+  opening_hours: string | null; // 010
+  maps_url: string | null;
+  upi_id: string | null;
+  upi_name: string | null;
+  tagline: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -309,6 +316,7 @@ export type RedListDbRow = {
   last_followup_outcome: FollowUpOutcome | null;
   last_followup_channel: FollowUpChannel | null;
   followup_count: number;
+  notify_care: boolean;
 };
 
 export type RenewalDueDbRow = {
@@ -322,6 +330,24 @@ export type RenewalDueDbRow = {
   pending_payment_id: string | null;
   pending_amount: number | null;
   pending_reference: string | null;
+  notify_renewal: boolean;
+};
+
+export type DashboardKpiRow = {
+  active_members: number;
+  checkins_today: number;
+  active_7_days: number;
+  red_list_open: number;
+  followups_due: number;
+  returned_this_month: number;
+  renewals_due_7_count: number;
+  renewals_due_7_amount: number;
+  renewal_collection_month: number;
+  addon_revenue_month: number;
+  cases_opened_today: number;
+  renewals_paid_today_count: number;
+  renewals_paid_today_amount: number;
+  payments_pending: number;
 };
 
 // ─── Supabase Database type (used with createClient) ───────────────────────
@@ -333,7 +359,7 @@ export type Database = {
         Row: Member;
         Insert: Omit<
           Member,
-          "id" | "created_at" | "updated_at" | "pin_hash" | "assigned_trainer_id" | "notes" | "status" | "weekly_target" | "join_date" | "marketing_consent" | "pin_failed_attempts" | "pin_locked_until"
+          "id" | "created_at" | "updated_at" | "pin_hash" | "assigned_trainer_id" | "notes" | "status" | "weekly_target" | "join_date" | "marketing_consent" | "pin_failed_attempts" | "pin_locked_until" | "notify_renewal" | "notify_care"
         > & {
           id?: string;
           pin_hash?: string;
@@ -513,7 +539,7 @@ export type Database = {
         Row: Settings;
         Insert: Omit<
           Settings,
-          "id" | "created_at" | "updated_at" | "logo_url" | "address" | "phone" | "gym_name" | "timezone" | "no_show_threshold_days" | "qr_rotation_seconds" | "duplicate_window_hours" | "renewal_windows" | "weekly_goal_default"
+          "id" | "created_at" | "updated_at" | "logo_url" | "address" | "phone" | "gym_name" | "timezone" | "no_show_threshold_days" | "qr_rotation_seconds" | "duplicate_window_hours" | "renewal_windows" | "weekly_goal_default" | "opening_hours" | "maps_url" | "upi_id" | "upi_name" | "tagline"
         > & {
           id?: string;
           logo_url?: string | null;
@@ -546,7 +572,7 @@ export type Database = {
       // Return shapes mirror the jsonb built in 005_hardening.sql.
       verify_payment: {
         Args: { p_payment_id: string; p_provider_ref: string; p_staff_id: string };
-        Returns: PaymentRpcResult<{ new_expiry: string; payment_id: string }>;
+        Returns: PaymentRpcResult<{ new_expiry: string | null; payment_id: string }>; // null for add-ons (010)
       };
       reject_payment: {
         Args: { p_payment_id: string; p_staff_id: string; p_reason: string };
@@ -562,6 +588,31 @@ export type Database = {
           p_reason?: string | null;
         };
         Returns: CheckInRpcResult;
+      };
+      // Shapes mirror 010_addons_dashboard_settings.sql.
+      create_addon_order: {
+        Args: { p_member_id: string; p_addon_id: string; p_quantity: number };
+        Returns:
+          | { ok: true; existing: boolean; payment_id: string }
+          | { ok: false; code: "VALIDATION" | "NOT_FOUND" | "FORBIDDEN" | "TRAINER_UNAVAILABLE" | "OUT_OF_STOCK"; stock?: number };
+      };
+      cancel_payment: {
+        Args: { p_payment_id: string; p_member_id: string };
+        Returns: { ok: true } | { ok: false; code: "NOT_FOUND" | "INVALID_STATE" };
+      };
+      record_pt_session: {
+        Args: { p_order_id: string; p_staff_id: string };
+        Returns:
+          | { ok: true; sessions_used: number; sessions_total: number }
+          | { ok: false; code: "FORBIDDEN" | "NOT_FOUND" | "ALL_USED" | "INVALID_STATE"; sessions_total?: number };
+      };
+      adjust_stock: {
+        Args: { p_addon_id: string; p_delta: number; p_reason: string; p_staff_id: string };
+        Returns: { ok: true; stock: number } | { ok: false; code: "FORBIDDEN" | "VALIDATION" | "NOT_FOUND" | "NEGATIVE_STOCK"; stock?: number };
+      };
+      dashboard_kpis: {
+        Args: Record<string, never>;
+        Returns: DashboardKpiRow;
       };
       // Shapes mirror 009_renewals.sql.
       create_renewal_order: {

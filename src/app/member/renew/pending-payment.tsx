@@ -6,9 +6,9 @@ import { toast } from "sonner";
 import { Copy, Hourglass, Smartphone } from "lucide-react";
 import { formatRupees } from "@/utils/money";
 import { FormError, FormField } from "@/components/form-field";
-import { claimPaymentAction } from "./actions";
+import { cancelPaymentAction, claimPaymentAction } from "./actions";
 
-/** Unpaid / awaiting-verification renewal: how to pay, then send the UPI reference. */
+/** Unpaid / awaiting-verification payment (renewal or add-on): how to pay, send the UPI reference, or cancel. */
 export function PendingPayment({
   paymentId,
   planName,
@@ -17,6 +17,7 @@ export function PendingPayment({
   upiId,
   upiLink,
   claimedRef,
+  afterCancelHref,
 }: {
   paymentId: string;
   planName: string;
@@ -25,10 +26,29 @@ export function PendingPayment({
   upiId: string | null;
   upiLink: string | null;
   claimedRef: string | null;
+  afterCancelHref: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<{ field?: string; message?: string }>({});
+
+  async function cancel() {
+    setPending(true);
+    try {
+      const result = await cancelPaymentAction(paymentId);
+      if (!result.ok) {
+        setError({ message: result.error.message });
+        return;
+      }
+      toast.success("Order cancelled. Nothing was charged by the app.");
+      router.push(afterCancelHref);
+      router.refresh();
+    } catch {
+      setError({ message: "We couldn't reach the server. Check your internet and try again." });
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -67,7 +87,7 @@ export function PendingPayment({
 
   return (
     <section className="card p-5">
-      <p className="text-sm text-muted">Renewal started · {receiptNo}</p>
+      <p className="text-sm text-muted">Order {receiptNo}</p>
       <h2 className="text-lg font-semibold text-foreground">
         Pay {formatRupees(amount)} for {planName}
       </h2>
@@ -119,8 +139,11 @@ export function PendingPayment({
         <button type="submit" className="btn-secondary w-full" disabled={pending} aria-busy={pending}>
           {pending ? "Sending…" : "I've paid — send reference"}
         </button>
-        <p className="text-xs text-muted">Your membership is extended only after the gym confirms this payment.</p>
+        <p className="text-xs text-muted">Nothing is activated until the gym confirms this payment.</p>
       </form>
+      <button type="button" className="btn-ghost mt-2 w-full text-sm text-muted" disabled={pending} onClick={cancel}>
+        Cancel this order — I haven&apos;t paid
+      </button>
     </section>
   );
 }

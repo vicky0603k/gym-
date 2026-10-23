@@ -36,7 +36,8 @@ Runs the daily scan (Red List) and builds renewal reminder + follow-ups-due list
 | `claimRenewalPayment` | payment_id, UPI reference | Member records the UTR from their UPI app. Status stays `Pending` — only `verifyPayment` makes it Paid. |
 | `getMyReceipt` | payment_id | Receipt data for a Paid payment (own payments only). |
 | `listAddons` | — | Active add-ons with live stock/availability. |
-| `createAddonOrder` | addon_id, qty | Stock/availability checked first (`OUT_OF_STOCK`, `TRAINER_UNAVAILABLE`); creates order + Pending payment. Never pre-selected — always an explicit member action. |
+| `createAddonOrder` | addon_id, qty | Stock/availability checked first (`OUT_OF_STOCK`, `TRAINER_UNAVAILABLE`); creates order + Pending payment in one transaction (`create_addon_order()`, migration 010). Product stock is reserved at order time and returned if the payment is rejected or the member cancels before paying. Never pre-selected — always an explicit member action. |
+| `cancelPayment` | payment_id | Member drops their own unpaid order before sending a UPI reference; reserved stock is returned. Rows are kept (Failed/Cancelled), never deleted. |
 | `updateMyPreferences` | notification + marketing toggles | Marketing opt-out takes effect immediately. |
 
 ## Server actions — Owner / Staff
@@ -55,7 +56,7 @@ Runs the daily scan (Red List) and builds renewal reminder + follow-ups-due list
 | `verifyPayment` | payment_id, decision: verify/reject, provider_ref | **The most sensitive action in the system.** One transaction: payment `Pending → Paid` (or Failed on reject), membership extension or add-on activation, receipt, audit row. Verifying an already-Paid payment returns `ALREADY_VERIFIED` and changes nothing. Owner role only. |
 | `refundPayment` | payment_id, reason | Marks payment Refunded and records the reversal as a new audit/membership adjustment entry — the original Paid record is not rewritten silently. Owner only. |
 | `upsertPlan` / `setPlanActive` | plan fields | Price changes affect future orders only; existing orders keep their snapshot amounts. |
-| `upsertAddon` / `adjustStock` / `recordPTSession` | addon fields / order_id | Stock can never go negative; PT session recording fails if `sessions_used = sessions_total`. |
+| `upsertAddon` / `adjustStock` / `recordPTSession` | addon fields / order_id | Stock can never go negative; PT session recording fails if `sessions_used = sessions_total` (both guards are in the database UPDATE, migration 010). Add-on edits are Owner only; stock (with a reason, audited) and PT sessions are Owner and front desk. Verifying an add-on payment makes PT/diet orders Active and product orders Completed (collect at the desk). |
 | `updateSettings` | gym profile, threshold, timings, defaults | Owner only. Threshold changes apply from the next scan. |
 
 ## WhatsApp deep links (no server call)

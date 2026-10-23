@@ -18,7 +18,7 @@ export default async function RenewPage() {
   const [home, plans, payments, gymName] = await Promise.all([
     getMemberHome(memberId),
     listPlans(),
-    listMemberPayments(memberId),
+    listMemberPayments(memberId, "Renewal"),
     getGymName(),
   ]);
   const membership = home?.membership;
@@ -89,6 +89,7 @@ export default async function RenewPage() {
           upiId={setup.upiId}
           upiLink={setup.upiId ? upiPayLink({ ...setup, upiId: setup.upiId }, pending.amount, `${gymName} renewal ${receiptNumber(pending.id)}`) : null}
           claimedRef={pending.providerRef}
+          afterCancelHref="/member/renew"
         />
       )}
 

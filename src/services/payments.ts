@@ -11,7 +11,7 @@ import { z } from "zod";
 import { createServiceClient } from "./supabase/server";
 import { validationError } from "./memberships";
 import { PAYMENT_STATUS } from "@/utils/constants";
-import type { Payment, PaymentRpcErrorCode, RenewalOrder } from "./supabase/database.types";
+import type { AddonOrder, AddonType, Payment, PaymentRpcErrorCode, RenewalOrder } from "./supabase/database.types";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
@@ -47,7 +47,7 @@ export async function verifyPayment(params: {
   paymentId: string;
   providerRef: string;
   staffId: string;
-}): Promise<ActionResult<{ newExpiry: string; paymentId: string }>> {
+}): Promise<ActionResult<{ newExpiry: string | null; paymentId: string }>> {
   const { data, error } = await createServiceClient().rpc("verify_payment", {
     p_payment_id: params.paymentId,
     p_provider_ref: params.providerRef,
@@ -79,6 +79,7 @@ export async function rejectPayment(params: {
 
 export interface PaymentDetail {
   id: string;
+  purpose: Payment["purpose"];
   memberId: string;
   memberName: string;
   memberPhone: string;
@@ -89,10 +90,12 @@ export interface PaymentDetail {
   providerRef: string | null;
   createdAt: string;
   verifiedAt: string | null;
-  planName: string;
-  durationDays: number;
-  newExpiry: string | null;
-  orderStatus: RenewalOrder["status"];
+  planName: string; // the plan renewed, or the add-on bought
+  durationDays: number; // plan duration or add-on validity
+  newExpiry: string | null; // renewals only
+  orderStatus: RenewalOrder["status"] | AddonOrder["status"];
+  quantity: number;
+  addonType: AddonType | null;
 }
 
 /** Receipt number shown to people: short, stable, derived from the payment id. */
@@ -100,44 +103,80 @@ export function receiptNumber(paymentId: string): string {
   return `RCPT-${paymentId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 }
 
+const NONE = Promise.resolve({ data: [] as never[], error: null });
+
 async function withOrders(payments: Payment[]): Promise<PaymentDetail[]> {
   if (!payments.length) return [];
   const supabase = createServiceClient();
-  const [orders, members] = await Promise.all([
-    supabase.from("renewal_orders").select("*").in("payment_id", payments.map((p) => p.id)),
+  const ids = (purpose: Payment["purpose"]) => payments.filter((p) => p.purpose === purpose).map((p) => p.id);
+  const renewalIds = ids("Renewal");
+  const addonIds = ids("AddOn");
+
+  const [renewalOrders, addonOrders, members] = await Promise.all([
+    renewalIds.length ? supabase.from("renewal_orders").select("*").in("payment_id", renewalIds) : NONE,
+    addonIds.length ? supabase.from("addon_orders").select("*").in("payment_id", addonIds) : NONE,
     supabase.from("members").select("id, name, phone").in("id", [...new Set(payments.map((p) => p.member_id))]),
   ]);
-  if (orders.error || members.error) throw new Error("PAYMENTS_LOAD_FAILED");
-  const plans = await supabase.from("plans").select("id, name, duration_days").in("id", [...new Set(orders.data.map((o) => o.plan_id))]);
-  if (plans.error) throw new Error("PAYMENTS_LOAD_FAILED");
+  if (renewalOrders.error || addonOrders.error || members.error) throw new Error("PAYMENTS_LOAD_FAILED");
 
-  return payments.flatMap((p) => {
-    const order = orders.data.find((o) => o.payment_id === p.id);
+  const planIds = [...new Set(renewalOrders.data.map((o) => o.plan_id))];
+  const addonItemIds = [...new Set(addonOrders.data.map((o) => o.addon_id))];
+  const [plans, addons] = await Promise.all([
+    planIds.length ? supabase.from("plans").select("id, name, duration_days").in("id", planIds) : NONE,
+    addonItemIds.length ? supabase.from("addons").select("id, title, type, validity_days").in("id", addonItemIds) : NONE,
+  ]);
+  if (plans.error || addons.error) throw new Error("PAYMENTS_LOAD_FAILED");
+
+  return payments.flatMap((p): PaymentDetail[] => {
     const member = members.data.find((m) => m.id === p.member_id);
-    const plan = plans.data.find((x) => x.id === order?.plan_id);
-    if (!order || !member) return [];
-    return [{
+    if (!member) return [];
+    const base = {
       id: p.id,
+      purpose: p.purpose,
       memberId: member.id,
       memberName: member.name,
       memberPhone: member.phone,
       amount: p.amount,
-      baseAmount: order.amount,
-      discount: order.discount,
       status: p.status,
       providerRef: p.provider_ref,
       createdAt: p.created_at,
       verifiedAt: p.verified_at,
+    };
+    if (p.purpose === "AddOn") {
+      const order = addonOrders.data.find((o) => o.payment_id === p.id);
+      const addon = addons.data.find((x) => x.id === order?.addon_id);
+      if (!order) return [];
+      return [{
+        ...base,
+        baseAmount: order.amount,
+        discount: 0,
+        planName: addon?.title ?? "Add-on",
+        durationDays: addon?.validity_days ?? 0,
+        newExpiry: null,
+        orderStatus: order.status,
+        quantity: order.quantity,
+        addonType: addon?.type ?? null,
+      }];
+    }
+    const order = renewalOrders.data.find((o) => o.payment_id === p.id);
+    const plan = plans.data.find((x) => x.id === order?.plan_id);
+    if (!order) return [];
+    return [{
+      ...base,
+      baseAmount: order.amount,
+      discount: order.discount,
       planName: plan?.name ?? "Membership",
       durationDays: plan?.duration_days ?? 0,
       newExpiry: order.new_expiry,
       orderStatus: order.status,
+      quantity: 1,
+      addonType: null,
     }];
   });
 }
 
 /**
- * The owner's verification queue: Pending renewal payments. Those where the
+ * The owner's verification queue: Pending renewal and add-on payments. Those where the
  * member has sent a UPI reference come first, then oldest first. Throws on a database error.
  */
 export async function listPendingPayments(): Promise<PaymentDetail[]> {
@@ -145,7 +184,6 @@ export async function listPendingPayments(): Promise<PaymentDetail[]> {
     .from("payments")
     .select("*")
     .eq("status", PAYMENT_STATUS.PENDING)
-    .eq("purpose", "Renewal")
     .order("created_at", { ascending: true })
     .limit(200);
   if (error) throw new Error("PAYMENTS_LOAD_FAILED");
@@ -154,12 +192,12 @@ export async function listPendingPayments(): Promise<PaymentDetail[]> {
 }
 
 /**
- * One renewal payment with its order. Pass memberId to scope it to that
- * member (member screens) — another member's payment returns null.
+ * One payment (renewal or add-on) with its order. Pass memberId to scope it to
+ * that member (member screens) — another member's payment returns null.
  */
 export async function getPaymentDetail(paymentId: string, memberId?: string): Promise<PaymentDetail | null> {
   if (!z.string().uuid().safeParse(paymentId).success) return null;
-  let query = createServiceClient().from("payments").select("*").eq("id", paymentId).eq("purpose", "Renewal");
+  let query = createServiceClient().from("payments").select("*").eq("id", paymentId);
   if (memberId) query = query.eq("member_id", memberId);
   const { data, error } = await query.maybeSingle();
   if (error) throw new Error("PAYMENT_LOAD_FAILED");
@@ -167,15 +205,11 @@ export async function getPaymentDetail(paymentId: string, memberId?: string): Pr
   return (await withOrders([data]))[0] ?? null;
 }
 
-/** A member's renewal payments, newest first. Throws on a database error. */
-export async function listMemberPayments(memberId: string): Promise<PaymentDetail[]> {
-  const { data, error } = await createServiceClient()
-    .from("payments")
-    .select("*")
-    .eq("member_id", memberId)
-    .eq("purpose", "Renewal")
-    .order("created_at", { ascending: false })
-    .limit(50);
+/** A member's payments (optionally one purpose), newest first. Throws on a database error. */
+export async function listMemberPayments(memberId: string, purpose?: Payment["purpose"]): Promise<PaymentDetail[]> {
+  let query = createServiceClient().from("payments").select("*").eq("member_id", memberId);
+  if (purpose) query = query.eq("purpose", purpose);
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(50);
   if (error) throw new Error("PAYMENTS_LOAD_FAILED");
   return withOrders(data);
 }
@@ -225,3 +259,22 @@ export const rejectInputSchema = z.object({
     .min(3, "Enter why this payment is being rejected")
     .max(200, "Keep the reason under 200 characters"),
 });
+
+const CANCEL_ERRORS: Record<string, string> = {
+  NOT_FOUND: "This payment could not be found.",
+  INVALID_STATE: "This order can't be cancelled now. If you have already paid, wait for the gym to confirm it.",
+};
+
+/** The member drops an unpaid order (before sending a reference). Reserved stock is returned. */
+export async function cancelPayment(memberId: string, paymentId: unknown): Promise<ActionResult<void>> {
+  if (!z.string().uuid().safeParse(paymentId).success) {
+    return { ok: false, error: { code: "NOT_FOUND", message: CANCEL_ERRORS.NOT_FOUND } };
+  }
+  const { data, error } = await createServiceClient().rpc("cancel_payment", {
+    p_payment_id: paymentId as string,
+    p_member_id: memberId,
+  });
+  if (error || !data) return { ok: false, error: { code: "INVALID_STATE", message: "We couldn't cancel this order. Please try again." } };
+  if (!data.ok) return { ok: false, error: { code: data.code, message: CANCEL_ERRORS[data.code] } };
+  return { ok: true, data: undefined };
+}

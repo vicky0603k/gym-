@@ -27,7 +27,7 @@ function row(over: Partial<RedListDbRow>): RedListDbRow {
     case_status: "Open", opened_on: "2026-10-20", next_action_date: null, plan_name: "Quarterly",
     expiry_date: "2027-01-10", join_date: "2026-03-01", last_visit: "2026-10-08", absent_days: 15,
     trainer_name: null, last_followup_at: null, last_followup_outcome: null, last_followup_channel: null,
-    followup_count: 0, ...over,
+    followup_count: 0, notify_care: true, ...over,
   };
 }
 

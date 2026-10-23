@@ -1,17 +1,18 @@
-import { CreditCard, History, Home, ScanLine } from "lucide-react";
+import { CreditCard, Home, Menu, ScanLine, ShoppingBag } from "lucide-react";
 import { NavLink } from "@/components/nav-link";
 import { LogoutButton } from "@/components/logout-button";
 
 /**
  * Member layout — bottom navigation, mobile-first, 56px tap targets.
- * A tab is listed only once its screen exists (Add-ons come later).
+ * Tabs per DESIGN.md: Home, Check-in, Renew, Add-ons, More (visits, payments).
  */
 
 const navItems = [
   { href: "/member", label: "Home", icon: Home, exact: true },
   { href: "/member/check-in", label: "Check-in", icon: ScanLine, exact: false },
   { href: "/member/renew", label: "Renew", icon: CreditCard, exact: false },
-  { href: "/member/attendance", label: "Visits", icon: History, exact: false },
+  { href: "/member/add-ons", label: "Add-ons", icon: ShoppingBag, exact: false },
+  { href: "/member/more", label: "More", icon: Menu, exact: false, also: ["/member/attendance", "/member/payments"] },
 ];
 
 export default function MemberLayout({
@@ -34,6 +35,7 @@ export default function MemberLayout({
               key={item.href}
               href={item.href}
               exact={item.exact}
+              also={"also" in item ? item.also : undefined}
               className="flex flex-col items-center justify-center gap-1 px-4 py-2 min-h-[56px] transition-colors flex-1"
             >
               <item.icon className="h-5 w-5" aria-hidden />

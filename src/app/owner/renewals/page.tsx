@@ -35,7 +35,7 @@ export default async function RenewalsPage() {
           <span className="text-sm font-normal text-muted">({queue.length})</span>
         </h2>
         {queue.length === 0 ? (
-          <p className="card p-4 text-sm text-muted">No payments waiting. New ones appear here as soon as a member pays.</p>
+          <p className="card p-4 text-sm text-muted">No payments waiting. Renewal and add-on payments appear here as soon as a member pays.</p>
         ) : (
           <ul className="card divide-y divide-border">
             {queue.map((p) => (
@@ -46,7 +46,9 @@ export default async function RenewalsPage() {
                       {p.memberName}
                     </Link>
                     <p className="text-sm text-muted">
-                      {p.planName} · {receiptNumber(p.id)} · {formatDisplayDateTime(p.createdAt)}
+                      {p.purpose === "AddOn" ? "Add-on: " : ""}
+                      {p.planName}
+                      {p.quantity > 1 ? ` × ${p.quantity}` : ""} · {receiptNumber(p.id)} · {formatDisplayDateTime(p.createdAt)}
                     </p>
                     <p className={p.providerRef ? "text-sm text-foreground" : "text-sm text-warning"}>
                       {p.providerRef ? `Member's UPI reference: ${p.providerRef}` : "Member hasn't sent a reference yet"}
@@ -56,8 +58,8 @@ export default async function RenewalsPage() {
                 </div>
                 {isOwner && (
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <ReviewDialog mode="verify" paymentId={p.id} memberName={p.memberName} planName={p.planName} amount={p.amount} claimedRef={p.providerRef} />
-                    <ReviewDialog mode="reject" paymentId={p.id} memberName={p.memberName} planName={p.planName} amount={p.amount} claimedRef={p.providerRef} />
+                    <ReviewDialog mode="verify" paymentId={p.id} memberName={p.memberName} planName={p.planName} amount={p.amount} claimedRef={p.providerRef} purpose={p.purpose} />
+                    <ReviewDialog mode="reject" paymentId={p.id} memberName={p.memberName} planName={p.planName} amount={p.amount} claimedRef={p.providerRef} purpose={p.purpose} />
                   </div>
                 )}
               </li>

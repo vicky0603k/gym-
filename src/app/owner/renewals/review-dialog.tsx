@@ -23,7 +23,9 @@ export function ReviewDialog({
   planName,
   amount,
   claimedRef,
+  purpose,
 }: {
+  purpose: "Renewal" | "AddOn";
   mode: Mode;
   paymentId: string;
   memberName: string;
@@ -53,11 +55,15 @@ export function ReviewDialog({
         return;
       }
       if (result.data && "newExpiry" in result.data) {
-        toast.success(`Payment verified — ${memberName}'s membership extended till ${formatDisplayDate(result.data.newExpiry)}`, {
-          action: { label: "Receipt", onClick: () => router.push(`/owner/payments/${paymentId}`) },
-        });
+        const { newExpiry } = result.data;
+        toast.success(
+          newExpiry
+            ? `Payment verified — ${memberName}'s membership extended till ${formatDisplayDate(newExpiry)}`
+            : `Payment verified — ${memberName}'s ${planName} is now active`,
+          { action: { label: "Receipt", onClick: () => router.push(`/owner/payments/${paymentId}`) } }
+        );
       } else {
-        toast.success(`Payment rejected. ${memberName}'s membership was not changed.`);
+        toast.success(`Payment rejected. Nothing was activated for ${memberName}.`);
       }
       setOpen(false);
       router.refresh();
@@ -94,8 +100,12 @@ export function ReviewDialog({
           </div>
           <Dialog.Description className="text-sm text-muted mb-4">
             {verify
-              ? `Only verify after you see ${formatRupees(amount)} in your bank or UPI app. ${planName} will be added to their membership straight away.`
-              : "Their membership will not change. They will see that the payment couldn't be confirmed."}
+              ? `Only verify after you see ${formatRupees(amount)} in your bank or UPI app. ${
+                  purpose === "Renewal" ? `${planName} will be added to their membership straight away.` : `${planName} starts straight away.`
+                }`
+              : purpose === "Renewal"
+                ? "Their membership will not change. They will see that the payment couldn't be confirmed."
+                : "The order is cancelled and any reserved stock goes back on the shelf."}
           </Dialog.Description>
           <form onSubmit={onSubmit} className="space-y-4" noValidate>
             <input type="hidden" name="paymentId" value={paymentId} />
