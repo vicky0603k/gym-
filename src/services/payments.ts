@@ -35,10 +35,11 @@ function rpcError(code: PaymentRpcErrorCode, validationMessage: string) {
 
 /**
  * Verify a pending renewal payment (Owner only — checked in the database).
- * verify_payment (migration 005) runs as one locked transaction: payment
+ * verify_payment (migrations 005, 006) runs as one locked transaction: payment
  * Pending → Paid, renewal order Paid, expiry extended from
  * max(today Kolkata, current expiry) + plan duration, audit row.
  * Verifying an already-Paid payment returns ALREADY_VERIFIED and changes nothing.
+ * A Cancelled or Pending membership returns INVALID_STATE and is never made Active.
  */
 export async function verifyPayment(params: {
   paymentId: string;
