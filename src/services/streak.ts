@@ -1,128 +1,152 @@
 /**
  * Weekly goal / streak service.
  *
- * The streak is a WEEKLY visit goal, never a daily calendar streak.
- * Computed on read from the attendance table — no streaks table.
- * Frozen weeks are excluded from the consecutive-weeks count.
+ * The streak is a WEEKLY visit goal, never a daily calendar streak (ADR-005).
+ * Computed on read from the attendance table — no streaks table (ADR-010).
+ * Weeks are Monday–Sunday in Asia/Kolkata.
+ *
+ * Fairness rules — a member is never marked as failing a week they could not train:
+ *  - a week that overlaps a pause/freeze and was not met is "paused" (neutral);
+ *  - the week they joined, if not met, is neutral too; weeks before joining are not shown;
+ *  - the current week is "in progress" until it is met — it never breaks a streak.
+ * A met week always counts, paused or not.
  */
 import { createServiceClient } from "./supabase/server";
-import { weekStartKolkata, weekEndKolkata } from "@/utils/dates";
-import { format } from "date-fns";
+import { addDaysToDate, kolkataMidnightUtc, toKolkataDateString, todayKolkata, weekStartOf } from "@/utils/dates";
+import { DEFAULT_WEEKLY_TARGET } from "@/utils/constants";
+
+export const LOOKBACK_WEEKS = 52;
+export const RECENT_WEEKS = 8;
+
+export type WeekResult = "met" | "missed" | "paused" | "current";
+
+export interface WeekSummary {
+  weekStart: string; // Monday, YYYY-MM-DD
+  visits: number;
+  result: WeekResult;
+}
 
 export interface WeeklyGoalState {
   completed: number;
   target: number;
   goalMet: boolean;
-  consecutiveWeeksGoalMet: number; // best current streak of consecutive goal-met weeks
+  pausedNow: boolean;
+  currentStreak: number; // consecutive met weeks up to now (this week counts once met)
+  bestStreak: number; // longest run of met weeks in the last LOOKBACK_WEEKS
+  recentWeeks: WeekSummary[]; // oldest → newest, ending with this week
+}
+
+export interface PausePeriod {
+  start: string;
+  end: string | null; // null = still paused
 }
 
 /**
- * Compute the current week's goal state for a member.
+ * Pure weekly-goal calculation. All inputs are Kolkata calendar dates.
+ * `checkinDates` may contain duplicates (one per visit).
  */
-export async function getWeeklyGoalState(
-  memberId: string
-): Promise<WeeklyGoalState> {
-  const supabase = createServiceClient();
+export function summariseWeeks(input: {
+  checkinDates: string[];
+  target: number;
+  pauses: PausePeriod[];
+  joinDate: string;
+  today: string;
+  lookbackWeeks?: number;
+}): WeeklyGoalState {
+  const { target, pauses, today } = input;
+  const lookback = input.lookbackWeeks ?? LOOKBACK_WEEKS;
+  const thisWeek = weekStartOf(today);
+  const joinWeek = weekStartOf(input.joinDate);
 
-  const { data: member } = await supabase
-    .from("members")
-    .select("weekly_target")
-    .eq("id", memberId)
-    .single();
+  const visitsByWeek = new Map<string, number>();
+  for (const d of input.checkinDates) {
+    const w = weekStartOf(d);
+    visitsByWeek.set(w, (visitsByWeek.get(w) ?? 0) + 1);
+  }
 
-  const target = member?.weekly_target ?? 4;
+  const overlapsPause = (weekStart: string) => {
+    const weekEnd = addDaysToDate(weekStart, 6);
+    return pauses.some((p) => p.start <= weekEnd && (p.end ?? today) >= weekStart);
+  };
+  const pausedNow = pauses.some((p) => p.start <= today && (p.end === null || p.end >= today));
 
-  // Current week bounds (Mon–Sun in Kolkata)
-  const now = new Date();
-  const kolkataStart = weekStartKolkata(now);
-  const kolkataEnd = weekEndKolkata(now);
-  // Convert back to UTC for the DB query
-  const utcStart = new Date(
-    kolkataStart.getTime() - 5.5 * 60 * 60 * 1000
-  );
-  const utcEnd = new Date(
-    kolkataEnd.getTime() - 5.5 * 60 * 60 * 1000 + 24 * 60 * 60 * 1000
-  );
+  // Oldest → newest, never before the join week.
+  const weeks: WeekSummary[] = [];
+  for (let i = lookback; i >= 0; i--) {
+    const weekStart = addDaysToDate(thisWeek, -7 * i);
+    if (weekStart < joinWeek) continue;
+    const visits = visitsByWeek.get(weekStart) ?? 0;
+    let result: WeekResult;
+    if (visits >= target) result = "met";
+    else if (overlapsPause(weekStart) || (weekStart === thisWeek && pausedNow)) result = "paused";
+    else if (weekStart === thisWeek) result = "current";
+    else if (weekStart === joinWeek) result = "paused"; // a part week after joining is not a failure
+    else result = "missed";
+    weeks.push({ weekStart, visits, result });
+  }
 
-  const { count: completed } = await supabase
-    .from("attendance")
-    .select("id", { count: "exact", head: true })
-    .eq("member_id", memberId)
-    .gte("checkin_at", utcStart.toISOString())
-    .lt("checkin_at", utcEnd.toISOString());
+  let bestStreak = 0;
+  let run = 0;
+  for (const w of weeks) {
+    if (w.result === "met") bestStreak = Math.max(bestStreak, ++run);
+    else if (w.result === "missed") run = 0;
+  }
 
-  // Consecutive goal-met weeks (look back up to 52 weeks)
-  const consecutiveWeeksGoalMet = await countConsecutiveGoalWeeks(memberId, target);
+  let currentStreak = 0;
+  for (let i = weeks.length - 1; i >= 0; i--) {
+    const r = weeks[i].result;
+    if (r === "met") currentStreak++;
+    else if (r === "missed") break;
+  }
 
+  const completed = visitsByWeek.get(thisWeek) ?? 0;
   return {
-    completed: completed ?? 0,
+    completed,
     target,
-    goalMet: (completed ?? 0) >= target,
-    consecutiveWeeksGoalMet,
+    goalMet: completed >= target,
+    pausedNow,
+    currentStreak,
+    bestStreak,
+    recentWeeks: weeks.slice(-RECENT_WEEKS),
   };
 }
 
 /**
- * Count how many consecutive past weeks (not counting the current week)
- * the member met their weekly goal. Frozen weeks are skipped.
+ * Load a member's weekly-goal state: three reads (member, memberships'
+ * freeze periods, one year of check-ins), then summariseWeeks().
+ * Throws on a database error.
  */
-async function countConsecutiveGoalWeeks(
-  memberId: string,
-  target: number
-): Promise<number> {
+export async function getWeeklyGoalState(memberId: string): Promise<WeeklyGoalState> {
   const supabase = createServiceClient();
+  const today = todayKolkata();
+  const fromDate = addDaysToDate(weekStartOf(today), -7 * LOOKBACK_WEEKS);
 
-  // Get frozen date ranges for this member
-  const { data: memberships } = await supabase
-    .from("memberships")
-    .select("freeze_start, freeze_end")
-    .eq("member_id", memberId)
-    .not("freeze_start", "is", null);
-
-  const frozenRanges: Array<{ start: string; end: string }> = (
-    memberships ?? []
-  )
-    .filter((m) => m.freeze_start && m.freeze_end)
-    .map((m) => ({ start: m.freeze_start!, end: m.freeze_end! }));
-
-  let streak = 0;
-  const now = new Date();
-
-  // Start from the most recently completed week
-  for (let weeksBack = 1; weeksBack <= 52; weeksBack++) {
-    const weekDate = new Date(now.getTime() - weeksBack * 7 * 24 * 60 * 60 * 1000);
-    const kolkataStart = weekStartKolkata(weekDate);
-    const kolkataEnd = weekEndKolkata(weekDate);
-
-    // Is this week frozen?
-    const weekStartStr = format(kolkataStart, "yyyy-MM-dd");
-    const isFrozen = frozenRanges.some(
-      (r) => weekStartStr >= r.start && weekStartStr <= r.end
-    );
-
-    if (isFrozen) {
-      // Skip frozen weeks — they don't break the streak
-      continue;
-    }
-
-    const utcStart = new Date(kolkataStart.getTime() - 5.5 * 60 * 60 * 1000);
-    const utcEnd = new Date(
-      kolkataEnd.getTime() - 5.5 * 60 * 60 * 1000 + 24 * 60 * 60 * 1000
-    );
-
-    const { count } = await supabase
+  const [member, memberships, attendance] = await Promise.all([
+    supabase.from("members").select("weekly_target, join_date, status").eq("id", memberId).maybeSingle(),
+    supabase.from("memberships").select("status, freeze_start, freeze_end").eq("member_id", memberId),
+    supabase
       .from("attendance")
-      .select("id", { count: "exact", head: true })
+      .select("checkin_at")
       .eq("member_id", memberId)
-      .gte("checkin_at", utcStart.toISOString())
-      .lt("checkin_at", utcEnd.toISOString());
+      .gte("checkin_at", kolkataMidnightUtc(fromDate).toISOString())
+      // The 3-hour duplicate guard caps a year at well under this.
+      .limit(3000),
+  ]);
+  if (member.error || memberships.error || attendance.error) throw new Error("GOAL_LOAD_FAILED");
 
-    if ((count ?? 0) >= target) {
-      streak++;
-    } else {
-      break;
-    }
-  }
+  // shortcut: a membership stores only its latest freeze period (DATABASE.md); earlier
+  // pauses of the same membership are in audit_logs only. Upgrade with a pauses table.
+  const pauses: PausePeriod[] = memberships.data
+    .filter((m) => m.freeze_start)
+    .map((m) => ({ start: m.freeze_start!, end: m.status === "Frozen" ? null : m.freeze_end }));
+  // A Paused member with no recorded freeze start is still on hold today.
+  if (member.data?.status === "Paused" && !pauses.some((p) => p.end === null)) pauses.push({ start: today, end: null });
 
-  return streak;
+  return summariseWeeks({
+    checkinDates: attendance.data.map((a) => toKolkataDateString(a.checkin_at)),
+    target: member.data?.weekly_target ?? DEFAULT_WEEKLY_TARGET,
+    pauses,
+    joinDate: member.data?.join_date ?? today,
+    today,
+  });
 }

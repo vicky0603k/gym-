@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
-import { LayoutDashboard, QrCode, Tags, UserCheck, Users } from "lucide-react";
+import { LayoutDashboard, QrCode, Settings, Tags, UserCheck, Users } from "lucide-react";
 import { getCurrentStaff } from "@/services/auth";
 import { LogoutButton } from "@/components/logout-button";
 import { NavLink } from "@/components/nav-link";
 
 /**
  * Owner layout — mobile: bottom bar; desktop: side bar (expanded).
- * A section is listed only once its screen exists (Red List, Renewals, Add-ons, Settings come later).
+ * A section is listed only once its screen exists (Red List, Renewals, Add-ons come later).
+ * Settings is Owner-only (front desk has no settings access).
  * Gate QR opens full screen over this layout.
  */
 
@@ -16,6 +17,7 @@ const navItems = [
   { href: "/owner/check-in", label: "Check-in", icon: UserCheck, exact: false },
   { href: "/owner/qr", label: "Gate QR", icon: QrCode, exact: false },
   { href: "/owner/plans", label: "Plans", icon: Tags, exact: false },
+  { href: "/owner/settings", label: "Settings", icon: Settings, exact: false, ownerOnly: true },
 ];
 
 export default async function OwnerLayout({
@@ -26,6 +28,7 @@ export default async function OwnerLayout({
   // Middleware only knows "signed in"; a staff_users row is what makes someone staff.
   const staff = await getCurrentStaff();
   if (!staff) redirect("/login");
+  const nav = navItems.filter((item) => !("ownerOnly" in item) || staff.role === "Owner");
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -38,7 +41,7 @@ export default async function OwnerLayout({
           <span className="font-bold text-foreground">Owner Panel</span>
         </div>
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.href}
               href={item.href}
@@ -71,15 +74,15 @@ export default async function OwnerLayout({
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-40 md:hidden">
         <div className="flex justify-around items-stretch overflow-x-auto">
-          {navItems.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.href}
               href={item.href}
               exact={item.exact}
-              className="flex flex-col items-center justify-center gap-1 px-3 py-2 min-h-[56px] flex-1 transition-colors"
+              className="flex flex-col items-center justify-center gap-1 px-1 py-2 min-h-[56px] min-w-0 flex-1 transition-colors"
             >
               <item.icon className="h-5 w-5" aria-hidden />
-              <span className="text-xs font-medium">{item.label}</span>
+              <span className="max-w-full truncate text-[11px] font-medium">{item.label}</span>
             </NavLink>
           ))}
         </div>

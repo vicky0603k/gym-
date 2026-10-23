@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { FormError, FormField } from "@/components/form-field";
 import { applyDiscount, formatRupees } from "@/utils/money";
 import { formatDisplayDate } from "@/utils/dates";
-import { DEFAULT_WEEKLY_TARGET } from "@/utils/constants";
 import type { Plan } from "@/services/supabase/database.types";
 import { createMemberAction, updateMemberAction } from "./actions";
 
@@ -21,7 +20,7 @@ const digitsOnly = (e: FormEvent<HTMLInputElement>) => {
 /** Add member (with PIN + first plan) or edit member. Server re-validates everything with Zod. */
 export function MemberForm(
   props:
-    | { mode: "create"; plans: Plan[]; trainers: Trainer[] }
+    | { mode: "create"; plans: Plan[]; trainers: Trainer[]; defaultWeeklyTarget: number }
     | { mode: "edit"; memberId: string; defaults: Defaults; trainers: Trainer[] }
 ) {
   const router = useRouter();
@@ -129,7 +128,7 @@ export function MemberForm(
             min={1}
             max={7}
             className="input"
-            defaultValue={d?.weeklyTarget ?? DEFAULT_WEEKLY_TARGET}
+            defaultValue={props.mode === "create" ? props.defaultWeeklyTarget : d?.weeklyTarget}
             required
             {...invalid("weeklyTarget")}
           />

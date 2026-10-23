@@ -4,6 +4,7 @@ import { ArrowLeft, Tags } from "lucide-react";
 import { getCurrentStaff } from "@/services/auth";
 import { listPlans } from "@/services/memberships";
 import { listActiveTrainers } from "@/services/members";
+import { getWeeklyGoalDefault } from "@/services/settings";
 import { EmptyState } from "@/components/states";
 import { MemberForm } from "../member-form";
 
@@ -14,7 +15,7 @@ export default async function NewMemberPage() {
   if (staff?.role !== "Owner") redirect("/owner/members");
 
   // listPlans throws on a database error (→ error.tsx); inactive plans are never offered.
-  const [allPlans, trainers] = await Promise.all([listPlans(), listActiveTrainers()]);
+  const [allPlans, trainers, weeklyTarget] = await Promise.all([listPlans(), listActiveTrainers(), getWeeklyGoalDefault()]);
   const plans = allPlans.filter((p) => p.is_active);
 
   return (
@@ -32,7 +33,7 @@ export default async function NewMemberPage() {
         />
       ) : (
         <div className="card p-5">
-          <MemberForm mode="create" plans={plans} trainers={trainers} />
+          <MemberForm mode="create" plans={plans} trainers={trainers} defaultWeeklyTarget={weeklyTarget} />
         </div>
       )}
     </div>

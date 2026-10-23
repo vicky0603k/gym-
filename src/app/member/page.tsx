@@ -2,17 +2,19 @@ import Link from "next/link";
 import { CalendarClock, IdCard, ScanLine } from "lucide-react";
 import { requireMember } from "@/services/auth";
 import { getMemberHome } from "@/services/members";
+import { getWeeklyGoalState } from "@/services/streak";
 import { daysUntilKolkata, formatDisplayDate } from "@/utils/dates";
 import { EmptyState } from "@/components/states";
 import { StatusBadge } from "@/components/status-badge";
+import { WeeklyGoalCard } from "./weekly-goal-card";
 
 /**
- * Member home — the member's real current plan and exact expiry date.
- * Weekly goal arrives in Phase 8; the renew link appears with its screen.
+ * Member home — real current plan, exact expiry date and the weekly goal.
+ * The renew link appears with its screen.
  */
 export default async function MemberHomePage() {
   const { memberId } = await requireMember();
-  const home = await getMemberHome(memberId);
+  const [home, goal] = await Promise.all([getMemberHome(memberId), getWeeklyGoalState(memberId)]);
   const membership = home?.membership ?? null;
 
   if (!membership) {
@@ -61,7 +63,9 @@ export default async function MemberHomePage() {
           </div>
         </div>
       </div>
-      <p className="text-xs text-muted mt-3">Started {formatDisplayDate(membership.start_date)}. Only you can see this.</p>
+      <p className="text-xs text-muted mt-3 mb-4">Started {formatDisplayDate(membership.start_date)}. Only you can see this.</p>
+
+      <WeeklyGoalCard goal={goal} />
 
       <Link href="/member/check-in" className="btn-primary mt-6 flex w-full items-center justify-center gap-2">
         <ScanLine className="h-5 w-5" aria-hidden /> Check in

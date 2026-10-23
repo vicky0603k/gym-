@@ -9,7 +9,6 @@ import {
   formatISO,
   parseISO,
   startOfWeek,
-  endOfWeek,
   differenceInCalendarDays,
   addDays,
   isAfter,
@@ -84,40 +83,26 @@ export function daysUntilKolkata(futureDate: Date | string): number {
   return differenceInCalendarDays(startOfDay(d), startOfDay(now));
 }
 
-/**
- * Start of the week (Monday) in Kolkata for a given UTC date.
+/*
+ * Week helpers work on Kolkata calendar dates (YYYY-MM-DD), never on Date
+ * objects shifted into "zoned" time, so they give the same answer whatever
+ * timezone the server runs in. Turn a timestamp into a Kolkata date first
+ * with toKolkataDateString().
  */
-export function weekStartKolkata(utcDate: Date | string): Date {
-  const local = toKolkata(
-    typeof utcDate === "string" ? parseISO(utcDate) : utcDate
-  );
-  return startOfWeek(local, { weekStartsOn: 1 });
+
+/** Monday (YYYY-MM-DD) of the Mon–Sun week containing a Kolkata date. */
+export function weekStartOf(dateStr: string): string {
+  return format(startOfWeek(parseISO(dateStr), { weekStartsOn: 1 }), "yyyy-MM-dd");
 }
 
-/**
- * End of the week (Sunday) in Kolkata for a given UTC date.
- */
-export function weekEndKolkata(utcDate: Date | string): Date {
-  const local = toKolkata(
-    typeof utcDate === "string" ? parseISO(utcDate) : utcDate
-  );
-  return endOfWeek(local, { weekStartsOn: 1 });
+/** A Kolkata date plus (or minus) whole days. */
+export function addDaysToDate(dateStr: string, days: number): string {
+  return format(addDays(parseISO(dateStr), days), "yyyy-MM-dd");
 }
 
-/**
- * Returns the Monday and Sunday of the current week in Kolkata as date strings.
- */
-export function currentWeekRangeKolkata(): {
-  start: string;
-  end: string;
-} {
-  const now = nowInKolkata();
-  const start = startOfWeek(now, { weekStartsOn: 1 });
-  const end = endOfWeek(now, { weekStartsOn: 1 });
-  return {
-    start: format(start, "yyyy-MM-dd"),
-    end: format(end, "yyyy-MM-dd"),
-  };
+/** The UTC instant of 00:00 in Asia/Kolkata on a date — for timestamptz query bounds. */
+export function kolkataMidnightUtc(dateStr: string): Date {
+  return fromZonedTime(`${dateStr}T00:00:00`, TIMEZONE);
 }
 
 /**

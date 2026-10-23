@@ -84,3 +84,15 @@
     scroll-behavior: smooth;
   }
 }
+
+/* Weekly goal ring fills from empty on load (member home) */
+@keyframes goal-fill {
+  from {
+    stroke-dashoffset: var(--goal-c);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .goal-ring {
+    animation: goal-fill 700ms ease-out;
+  }
+}
