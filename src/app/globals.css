@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    /* Prevent horizontal scroll on mobile */
+    overflow-x: hidden;
+  }
+
+  /* Minimum tap targets on mobile */
+  button,
+  a,
+  [role="button"] {
+    @apply min-h-[48px];
+  }
+
+  /* Better touch scrolling */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer components {
+  /* Card surface */
+  .card {
+    @apply bg-surface rounded-lg border border-border;
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply bg-accent text-accent-foreground font-semibold rounded-lg px-6 py-3 min-h-[48px]
+           hover:bg-accent-muted active:scale-[0.98] transition-all duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Secondary button */
+  .btn-secondary {
+    @apply bg-surface-2 text-foreground font-semibold rounded-lg px-6 py-3 min-h-[48px]
+           border border-border hover:bg-border active:scale-[0.98] transition-all duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Ghost button */
+  .btn-ghost {
+    @apply text-foreground font-medium rounded-lg px-4 py-3 min-h-[48px]
+           hover:bg-surface-2 active:scale-[0.98] transition-all duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Danger button */
+  .btn-danger {
+    @apply bg-danger/10 text-danger font-semibold rounded-lg px-6 py-3 min-h-[48px]
+           border border-danger/30 hover:bg-danger/20 active:scale-[0.98] transition-all duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Input field */
+  .input {
+    @apply w-full bg-surface-2 border border-border rounded-lg px-4 py-3 text-foreground
+           text-base placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50
+           focus:border-accent disabled:opacity-50;
+  }
+
+  /* Label */
+  .label {
+    @apply block text-sm font-medium text-muted mb-1;
+  }
+
+  /* Stat card KPI number */
+  .kpi-number {
+    @apply text-3xl font-bold text-foreground tabular-nums;
+  }
+}
+
+/* Smooth transitions for the whole app */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
