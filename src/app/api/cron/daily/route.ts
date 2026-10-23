@@ -14,12 +14,12 @@ function authorised(header: string | null): boolean {
 
 /**
  * GET /api/cron/daily
- * Runs the daily no-show scan (Red List). Vercel Cron calls it at 07:00 IST (vercel.json).
+ * Marks lapsed members Expired, then runs the no-show scan (Red List). Vercel Cron calls it at 07:00 IST (vercel.json).
  *
  * Auth: Authorization: Bearer <CRON_SECRET> only.
  * Idempotent: a second run on the same day creates no duplicate cases.
  *
- * Response: { cases_opened, followups_due } counts for logging.
+ * Response: { cases_opened, followups_due, members_expired } counts for logging.
  */
 export async function GET(request: Request) {
   if (!authorised(request.headers.get("authorization"))) {
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   try {
     const result = await runDailyScan();
     return NextResponse.json(
-      { cases_opened: result.casesOpened, followups_due: result.followupsDue },
+      { cases_opened: result.casesOpened, followups_due: result.followupsDue, members_expired: result.membersExpired },
       { headers: NO_STORE }
     );
   } catch {

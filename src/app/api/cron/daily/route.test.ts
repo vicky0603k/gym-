@@ -11,7 +11,7 @@ const call = (auth?: string) =>
 
 beforeEach(() => {
   vi.stubEnv("CRON_SECRET", "cron-secret");
-  vi.mocked(runDailyScan).mockReset().mockResolvedValue({ casesOpened: 2, followupsDue: 1, threshold: 10 });
+  vi.mocked(runDailyScan).mockReset().mockResolvedValue({ casesOpened: 2, followupsDue: 1, threshold: 10, membersExpired: 4 });
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -30,7 +30,7 @@ describe("GET /api/cron/daily", () => {
   it("runs the scan with the right secret", async () => {
     const res = await call("Bearer cron-secret");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ cases_opened: 2, followups_due: 1 });
+    expect(await res.json()).toEqual({ cases_opened: 2, followups_due: 1, members_expired: 4 });
   });
 
   it("returns 500 without details when the scan fails", async () => {

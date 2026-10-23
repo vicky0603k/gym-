@@ -32,10 +32,12 @@ function row(over: Partial<RedListDbRow>): RedListDbRow {
 }
 
 describe("runDailyScan", () => {
-  it("calls run_no_show_scan once and maps the counts", async () => {
-    rpc.mockResolvedValue({ data: { ok: true, cases_opened: 3, followups_due: 1, threshold: 10 }, error: null });
-    await expect(runDailyScan()).resolves.toEqual({ casesOpened: 3, followupsDue: 1, threshold: 10 });
-    expect(rpc).toHaveBeenCalledWith("run_no_show_scan", {});
+  it("marks lapsed members Expired first, then runs the no-show scan", async () => {
+    rpc
+      .mockResolvedValueOnce({ data: { ok: true, memberships_expired: 5, members_expired: 4 }, error: null })
+      .mockResolvedValueOnce({ data: { ok: true, cases_opened: 3, followups_due: 1, threshold: 10 }, error: null });
+    await expect(runDailyScan()).resolves.toEqual({ casesOpened: 3, followupsDue: 1, threshold: 10, membersExpired: 4 });
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(["expire_lapsed_memberships", "run_no_show_scan"]);
   });
 
   it("throws (never reports zero) when the database call fails", async () => {

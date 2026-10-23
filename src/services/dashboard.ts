@@ -1,9 +1,13 @@
 /**
  * Dashboard service — all KPI queries.
  * Every number is a live query; nothing cached or hardcoded.
+ *
+ * The definitions live in dashboard_kpis() (migration 010) and reuse the same
+ * red_list() / renewals_due() functions as the screens each card links to, so
+ * a card and its list always agree.
  */
 import { createServiceClient } from "./supabase/server";
-import { todayKolkata } from "@/utils/dates";
+import { getRedList, type RedListRow } from "./red-list";
 
 export interface DashboardKPIs {
   activeMembers: number;
@@ -15,129 +19,38 @@ export interface DashboardKPIs {
   renewalCollectionThisMonth: number;
   addonRevenueThisMonth: number;
   followupsDueToday: number;
+  summary: {
+    casesOpenedToday: number;
+    renewalsPaidToday: { count: number; amount: number };
+    paymentsPending: number;
+  };
 }
 
+/** Throws on a database error (the dashboard then shows its error state with Retry). */
 export async function getDashboardKPIs(): Promise<DashboardKPIs> {
-  const supabase = createServiceClient();
-  const today = todayKolkata();
-
-  // Today's start and end in UTC (Kolkata is UTC+5:30)
-  const todayStart = new Date(`${today}T00:00:00+05:30`).toISOString();
-  const todayEnd = new Date(`${today}T23:59:59+05:30`).toISOString();
-
-  // 7 days ago
-  const sevenDaysAgo = new Date(
-    new Date(`${today}T00:00:00+05:30`).getTime() - 7 * 24 * 60 * 60 * 1000
-  ).toISOString();
-
-  // Start of current month
-  const monthStart = today.substring(0, 8) + "01";
-  const monthStartUTC = new Date(`${monthStart}T00:00:00+05:30`).toISOString();
-
-  const [
-    { count: activeMembers },
-    { count: todayCheckins },
-    { count: openRedListCases },
-    { count: sevenDayActiveMembers },
-    { count: membersReturnedAfterFollowUp },
-    { count: followupsDueToday },
-  ] = await Promise.all([
-    supabase
-      .from("members")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "Active"),
-
-    supabase
-      .from("attendance")
-      .select("id", { count: "exact", head: true })
-      .gte("checkin_at", todayStart)
-      .lte("checkin_at", todayEnd),
-
-    supabase
-      .from("no_show_cases")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["Open", "Contacted", "FollowUpDue"]),
-
-    supabase
-      .from("attendance")
-      .select("member_id", { count: "exact", head: true })
-      .gte("checkin_at", sevenDaysAgo),
-
-    supabase
-      .from("no_show_cases")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "Returned"),
-
-    supabase
-      .from("no_show_cases")
-      .select("id", { count: "exact", head: true })
-      .eq("next_action_date", today)
-      .in("status", ["Contacted", "FollowUpDue"]),
-  ]);
-
-  // Renewals due in next 7 days
-  const in7Days = new Date(
-    new Date(`${today}T23:59:59+05:30`).getTime() + 7 * 24 * 60 * 60 * 1000
-  )
-    .toISOString()
-    .substring(0, 10);
-
-  const { data } = await supabase
-    .from("memberships")
-    .select("expiry_date, plans(price, discount_pct)")
-    .eq("status", "Active")
-    .gte("expiry_date", today)
-    .lte("expiry_date", in7Days);
-
-  const renewalsDue = data as
-    | { expiry_date: string; plans: { price: number; discount_pct: number } | null }[]
-    | null;
-
-  const renewalsDueIn7Days = {
-    count: renewalsDue?.length ?? 0,
-    expectedAmount: (renewalsDue ?? []).reduce((sum, m) => {
-      const plan = m.plans;
-      if (!plan) return sum;
-      const disc = Math.floor((plan.price * plan.discount_pct) / 100);
-      return sum + plan.price - disc;
-    }, 0),
-  };
-
-  // Renewal collection this month
-  const { data: renewalPayments } = await supabase
-    .from("payments")
-    .select("amount")
-    .eq("purpose", "Renewal")
-    .eq("status", "Paid")
-    .gte("verified_at", monthStartUTC);
-
-  const renewalCollectionThisMonth = (renewalPayments ?? []).reduce(
-    (sum, p) => sum + p.amount,
-    0
-  );
-
-  // Add-on revenue this month
-  const { data: addonPayments } = await supabase
-    .from("payments")
-    .select("amount")
-    .eq("purpose", "AddOn")
-    .eq("status", "Paid")
-    .gte("verified_at", monthStartUTC);
-
-  const addonRevenueThisMonth = (addonPayments ?? []).reduce(
-    (sum, p) => sum + p.amount,
-    0
-  );
-
+  const { data, error } = await createServiceClient().rpc("dashboard_kpis", {});
+  if (error || !data) throw new Error("DASHBOARD_LOAD_FAILED");
   return {
-    activeMembers: activeMembers ?? 0,
-    todayCheckins: todayCheckins ?? 0,
-    sevenDayActiveMembers: sevenDayActiveMembers ?? 0,
-    openRedListCases: openRedListCases ?? 0,
-    membersReturnedAfterFollowUp: membersReturnedAfterFollowUp ?? 0,
-    renewalsDueIn7Days,
-    renewalCollectionThisMonth,
-    addonRevenueThisMonth,
-    followupsDueToday: followupsDueToday ?? 0,
+    activeMembers: data.active_members,
+    todayCheckins: data.checkins_today,
+    sevenDayActiveMembers: data.active_7_days,
+    openRedListCases: data.red_list_open,
+    membersReturnedAfterFollowUp: data.returned_this_month,
+    renewalsDueIn7Days: { count: data.renewals_due_7_count, expectedAmount: data.renewals_due_7_amount },
+    renewalCollectionThisMonth: data.renewal_collection_month,
+    addonRevenueThisMonth: data.addon_revenue_month,
+    followupsDueToday: data.followups_due,
+    summary: {
+      casesOpenedToday: data.cases_opened_today,
+      renewalsPaidToday: { count: data.renewals_paid_today_count, amount: data.renewals_paid_today_amount },
+      paymentsPending: data.payments_pending,
+    },
   };
+}
+
+/** Follow-ups due today or overdue, most absent first. */
+export async function getFollowUpsDue(limit = 5): Promise<{ rows: RedListRow[]; total: number }> {
+  const { rows } = await getRedList();
+  const due = rows.filter((r) => r.followUpDue);
+  return { rows: due.slice(0, limit), total: due.length };
 }

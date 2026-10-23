@@ -26,11 +26,23 @@ export const EXPIRING_SOON_DAYS = 14;
 
 export type RedListRow = RedListDbRow & { followUpDue: boolean };
 
-/** Run the daily no-show scan (cron and the owner's "Run scan now"). Throws on a database error. */
-export async function runDailyScan(): Promise<{ casesOpened: number; followupsDue: number; threshold: number }> {
-  const { data, error } = await createServiceClient().rpc("run_no_show_scan", {});
+/**
+ * Run the daily scan (cron and the owner's "Run scan now"): first mark lapsed
+ * memberships/members Expired (migration 011), then open no-show cases. Both
+ * steps are idempotent. Throws on a database error.
+ */
+export async function runDailyScan(): Promise<{ casesOpened: number; followupsDue: number; threshold: number; membersExpired: number }> {
+  const supabase = createServiceClient();
+  const expired = await supabase.rpc("expire_lapsed_memberships", {});
+  if (expired.error || !expired.data) throw new Error("SCAN_FAILED");
+  const { data, error } = await supabase.rpc("run_no_show_scan", {});
   if (error || !data) throw new Error("SCAN_FAILED");
-  return { casesOpened: data.cases_opened, followupsDue: data.followups_due, threshold: data.threshold };
+  return {
+    casesOpened: data.cases_opened,
+    followupsDue: data.followups_due,
+    threshold: data.threshold,
+    membersExpired: expired.data.members_expired,
+  };
 }
 
 export function matchesFilter(row: RedListDbRow, filter: RedListFilter | undefined, today: string): boolean {

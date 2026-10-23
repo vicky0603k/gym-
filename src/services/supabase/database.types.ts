@@ -610,6 +610,10 @@ export type Database = {
         Args: { p_addon_id: string; p_delta: number; p_reason: string; p_staff_id: string };
         Returns: { ok: true; stock: number } | { ok: false; code: "FORBIDDEN" | "VALIDATION" | "NOT_FOUND" | "NEGATIVE_STOCK"; stock?: number };
       };
+      expire_lapsed_memberships: {
+        Args: Record<string, never>;
+        Returns: { ok: true; memberships_expired: number; members_expired: number };
+      };
       dashboard_kpis: {
         Args: Record<string, never>;
         Returns: DashboardKpiRow;

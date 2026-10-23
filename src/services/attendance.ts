@@ -185,3 +185,22 @@ export async function countCheckinsToday(): Promise<number> {
   if (error) throw new Error("ATTENDANCE_COUNT_FAILED");
   return count ?? 0;
 }
+
+/** Today's check-ins (Kolkata day) with member names, newest first. Throws on a database error. */
+export async function listCheckinsToday(): Promise<(Attendance & { memberName: string })[]> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("*")
+    .gte("checkin_at", kolkataMidnightUtc(todayKolkata()).toISOString())
+    .order("checkin_at", { ascending: false })
+    .limit(500);
+  if (error) throw new Error("ATTENDANCE_LOAD_FAILED");
+  if (!data.length) return [];
+  const { data: members, error: mError } = await supabase
+    .from("members")
+    .select("id, name")
+    .in("id", [...new Set(data.map((a) => a.member_id))]);
+  if (mError) throw new Error("ATTENDANCE_LOAD_FAILED");
+  return data.map((a) => ({ ...a, memberName: members.find((m) => m.id === a.member_id)?.name ?? "Member" }));
+}
