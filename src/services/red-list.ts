@@ -138,7 +138,7 @@ export async function getRedList(
 ): Promise<RedListRow[]> {
   const supabase = createServiceClient();
 
-  const { data: cases } = await supabase
+  const { data } = await supabase
     .from("no_show_cases")
     .select(
       `
@@ -154,22 +154,29 @@ export async function getRedList(
     ])
     .order("absent_days_at_open", { ascending: false });
 
+  type CaseWithJoins = NoShowCase & {
+    members: {
+      id: string;
+      name: string;
+      phone: string;
+      assigned_trainer_id: string | null;
+      weekly_target: number;
+    } | null;
+    followups: FollowUp[];
+  };
+  const cases = data as CaseWithJoins[] | null;
+
   if (!cases) return [];
 
   // Enrich with membership and trainer info
   const rows: RedListRow[] = [];
 
   for (const c of cases) {
-    const member = c.members as {
-      id: string;
-      name: string;
-      phone: string;
-      assigned_trainer_id: string | null;
-    } | null;
+    const member = c.members;
     if (!member) continue;
 
     // Current active membership
-    const { data: membership } = await supabase
+    const { data: membershipData } = await supabase
       .from("memberships")
       .select("expiry_date, plans(name)")
       .eq("member_id", member.id)
@@ -177,6 +184,10 @@ export async function getRedList(
       .order("expiry_date", { ascending: false })
       .limit(1)
       .single();
+
+    const membership = membershipData as
+      | { expiry_date: string; plans: { name: string } | null }
+      | null;
 
     // Last visit
     const { data: lastAttendance } = await supabase
@@ -217,10 +228,10 @@ export async function getRedList(
           )[0]
         : null;
 
-    const planData = membership?.plans as { name: string } | null;
+    const planData = membership?.plans;
 
     rows.push({
-      case: c as unknown as NoShowCase,
+      case: c,
       memberName: member.name,
       memberPhone: member.phone,
       planName: planData?.name ?? null,

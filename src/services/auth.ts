@@ -36,7 +36,11 @@ export async function getCurrentStaff(): Promise<CurrentStaff | null> {
   if (!staff) return null;
 
   return {
-    ...staff,
+    id: staff.id,
+    name: staff.name,
+    role: staff.role,
+    created_at: staff.created_at,
+    updated_at: staff.updated_at,
     email: user.email ?? "",
   };
 }

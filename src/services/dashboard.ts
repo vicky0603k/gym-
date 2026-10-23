@@ -82,17 +82,21 @@ export async function getDashboardKPIs(): Promise<DashboardKPIs> {
     .toISOString()
     .substring(0, 10);
 
-  const { data: renewalsDue } = await supabase
+  const { data } = await supabase
     .from("memberships")
     .select("expiry_date, plans(price, discount_pct)")
     .eq("status", "Active")
     .gte("expiry_date", today)
     .lte("expiry_date", in7Days);
 
+  const renewalsDue = data as
+    | { expiry_date: string; plans: { price: number; discount_pct: number } | null }[]
+    | null;
+
   const renewalsDueIn7Days = {
     count: renewalsDue?.length ?? 0,
     expectedAmount: (renewalsDue ?? []).reduce((sum, m) => {
-      const plan = m.plans as { price: number; discount_pct: number } | null;
+      const plan = m.plans;
       if (!plan) return sum;
       const disc = Math.floor((plan.price * plan.discount_pct) / 100);
       return sum + plan.price - disc;

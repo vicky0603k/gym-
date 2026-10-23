@@ -16,16 +16,19 @@ export async function listAddons(): Promise<
 > {
   const supabase = createServiceClient();
 
-  const { data: addons } = await supabase
+  const { data } = await supabase
     .from("addons")
-    .select("*, trainers(name, is_active)")
+    .select("*, trainers(id, name, is_active)")
     .eq("is_active", true)
     .order("type", { ascending: true });
 
+  type AddonWithTrainer = Addon & {
+    trainers: { id: string; name: string; is_active: boolean } | null;
+  };
+  const addons = data as AddonWithTrainer[] | null;
+
   return (addons ?? []).map((addon) => {
-    const trainer = addon.trainers as
-      | { name: string; is_active: boolean }
-      | null;
+    const trainer = addon.trainers;
 
     if (addon.type === "Product" && addon.stock !== null && addon.stock <= 0) {
       return { ...addon, available: false, unavailableReason: "Out of stock" };
@@ -57,12 +60,17 @@ export async function createAddonOrder(params: {
 > {
   const supabase = createServiceClient();
 
-  const { data: addon } = await supabase
+  const { data } = await supabase
     .from("addons")
     .select("*, trainers(id, name, is_active)")
     .eq("id", params.addonId)
     .eq("is_active", true)
     .single();
+
+  type AddonWithTrainer = Addon & {
+    trainers: { id: string; name: string; is_active: boolean } | null;
+  };
+  const addon = data as AddonWithTrainer | null;
 
   if (!addon) {
     return { ok: false, error: { code: "NOT_FOUND", message: "Add-on not found." } };
@@ -84,9 +92,7 @@ export async function createAddonOrder(params: {
   }
 
   // Trainer availability check
-  const trainer = addon.trainers as
-    | { id: string; name: string; is_active: boolean }
-    | null;
+  const trainer = addon.trainers;
   if (addon.type === "PT" && trainer && !trainer.is_active) {
     return {
       ok: false,

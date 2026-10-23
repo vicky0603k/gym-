@@ -77,11 +77,15 @@ export async function verifyPayment(params: {
   }
 
   // Load the renewal order
-  const { data: renewalOrder } = await supabase
+  const { data } = await supabase
     .from("renewal_orders")
     .select("*, plans(duration_days)")
     .eq("payment_id", params.paymentId)
     .single();
+
+  const renewalOrder = data as
+    | (RenewalOrder & { plans: { duration_days: number } | null })
+    | null;
 
   if (!renewalOrder) {
     return {
@@ -90,7 +94,7 @@ export async function verifyPayment(params: {
     };
   }
 
-  const planData = renewalOrder.plans as { duration_days: number } | null;
+  const planData = renewalOrder.plans;
   const durationDays = planData?.duration_days ?? 30;
 
   // Load current membership expiry

@@ -8,7 +8,7 @@ import { todayKolkata, toKolkataDateString } from "@/utils/dates";
 import { DUPLICATE_WINDOW_HOURS, CASE_STATUS } from "@/utils/constants";
 import type { Attendance } from "./supabase/database.types";
 
-export interface CheckInResult {
+export type CheckInResult = {
   ok: true;
   attendance: Attendance;
   weeklyGoal: { completed: number; target: number };
@@ -19,7 +19,7 @@ export interface CheckInResult {
     code: string;
     message: string;
   };
-}
+};
 
 /**
  * QR-based check-in. Verifies the token, checks membership status,
