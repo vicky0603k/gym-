@@ -25,6 +25,8 @@ The person. One row per gym member.
 | weekly_target | int default 4 | Visits per week goal |
 | join_date | date | |
 | marketing_consent | boolean default false | Separate from service messages |
+| notify_renewal | boolean default true | Member toggle: renewal reminder WhatsApps (migration 010) |
+| notify_care | boolean default true | Member toggle: missed-visit (Red List) WhatsApps (migration 010) |
 | notes | text | Owner-only |
 
 ### trainers
@@ -180,6 +182,8 @@ Single-row gym configuration.
 | duplicate_window_hours | int default 3 | |
 | renewal_windows | int[] default `{14,7,3,0,-3}` | Owner pipeline stages in days relative to expiry. The 14-day stage is an OWNER-ONLY heads-up/pipeline view — member reminder notifications fire only at `{7,3,0,-3}` (decided 23 Oct 2026) |
 | weekly_goal_default | int default 4 | |
+| tagline, opening_hours, maps_url | text | Gym profile shown on the landing page (migration 010) |
+| upi_id, upi_name | text | Where members pay renewals and add-ons (migration 010; replaces the GYM_UPI_ID env var, kept as fallback) |
 
 ### audit_logs (append-only, no delete policy for anyone)
 | Column | Type | Notes |

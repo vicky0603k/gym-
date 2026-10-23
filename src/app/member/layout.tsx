@@ -4,7 +4,7 @@ import { LogoutButton } from "@/components/logout-button";
 
 /**
  * Member layout — bottom navigation, mobile-first, 56px tap targets.
- * Tabs per DESIGN.md: Home, Check-in, Renew, Add-ons, More (visits, payments).
+ * Tabs per DESIGN.md: Home, Check-in, Renew, Add-ons, More (visits, payments, settings).
  */
 
 const navItems = [
@@ -12,7 +12,7 @@ const navItems = [
   { href: "/member/check-in", label: "Check-in", icon: ScanLine, exact: false },
   { href: "/member/renew", label: "Renew", icon: CreditCard, exact: false },
   { href: "/member/add-ons", label: "Add-ons", icon: ShoppingBag, exact: false },
-  { href: "/member/more", label: "More", icon: Menu, exact: false, also: ["/member/attendance", "/member/payments"] },
+  { href: "/member/more", label: "More", icon: Menu, exact: false, also: ["/member/attendance", "/member/payments", "/member/settings"] },
 ];
 
 export default function MemberLayout({

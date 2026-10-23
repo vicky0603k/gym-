@@ -3,7 +3,7 @@ import { BadgeCheck, MessageCircle, Phone, ReceiptIndianRupee } from "lucide-rea
 import { getCurrentStaff } from "@/services/auth";
 import { listPendingPayments, receiptNumber } from "@/services/payments";
 import { whatsAppLink } from "@/services/red-list";
-import { listRenewalsDue, renewalReminderMessage, siteOrigin, STAGE_INFO } from "@/services/renewals";
+import { listRenewalsDue, renewalReminderMessage, siteOrigin } from "@/services/renewals";
 import { formatDisplayDate, formatDisplayDateTime } from "@/utils/dates";
 import { formatRupees } from "@/utils/money";
 import { EmptyState } from "@/components/states";
@@ -80,11 +80,11 @@ export default async function RenewalsPage() {
           />
         ) : (
           groups.map((g) => (
-            <div key={g.stage} className="card">
+            <div key={g.key} className="card">
               <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                 <div>
-                  <h3 className="font-semibold text-foreground">{STAGE_INFO[g.stage].title}</h3>
-                  {!STAGE_INFO[g.stage].memberReminder && <p className="text-xs text-muted">Heads-up only — members aren&apos;t messaged yet</p>}
+                  <h3 className="font-semibold text-foreground">{g.title}</h3>
+                  {!g.memberReminder && <p className="text-xs text-muted">Heads-up only — members aren&apos;t messaged yet</p>}
                 </div>
                 <p className="text-right text-sm text-muted">
                   {g.rows.length} · <span className="font-semibold text-foreground">{formatRupees(g.expected)}</span>
@@ -107,13 +107,14 @@ export default async function RenewalsPage() {
                         </p>
                         <p className="text-xs text-muted">
                           {r.pending_payment_id ? `Payment of ${formatRupees(r.pending_amount ?? 0)} pending` : `Renews at ${formatRupees(r.renewal_amount)}`}
+                          {!r.notify_renewal && " · opted out of renewal reminders"}
                         </p>
                       </div>
                       <div className="flex gap-2">
                         <a href={`tel:+91${r.member_phone}`} className="btn-secondary px-3" aria-label={`Call ${r.member_name}`}>
                           <Phone className="h-4 w-4" aria-hidden />
                         </a>
-                        {STAGE_INFO[g.stage].memberReminder && !r.pending_payment_id && (
+                        {g.memberReminder && !r.pending_payment_id && r.notify_renewal && (
                           <a
                             href={whatsAppLink(
                               r.member_phone,

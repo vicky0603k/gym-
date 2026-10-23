@@ -11,11 +11,10 @@ export const metadata = { title: "Pay for add-on" };
 /** Payment step for an add-on order, scoped to the session's member. */
 export default async function AddonPayPage({ params }: { params: { paymentId: string } }) {
   const { memberId } = await requireMember();
-  const [payment, gymName] = await Promise.all([getPaymentDetail(params.paymentId, memberId), getGymName()]);
+  const [payment, gymName, setup] = await Promise.all([getPaymentDetail(params.paymentId, memberId), getGymName(), getPaymentSetup()]);
   if (!payment || payment.purpose !== "AddOn") notFound();
   if (payment.status !== "Pending") redirect(`/member/payments/${payment.id}`);
 
-  const setup = getPaymentSetup(gymName);
   const title = payment.quantity > 1 ? `${payment.planName} × ${payment.quantity}` : payment.planName;
 
   return (

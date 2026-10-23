@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ChevronRight, History, ReceiptIndianRupee } from "lucide-react";
+import { Bell, ChevronRight, History, ReceiptIndianRupee } from "lucide-react";
 
 export const metadata = { title: "More" };
 
 const LINKS = [
   { href: "/member/attendance", label: "My visits", hint: "Every check-in, newest first", icon: History },
   { href: "/member/payments", label: "Payments and receipts", hint: "Renewals and add-ons", icon: ReceiptIndianRupee },
+  { href: "/member/settings", label: "Message settings", hint: "Reminders and offers", icon: Bell },
 ];
 
 export default function MemberMorePage() {

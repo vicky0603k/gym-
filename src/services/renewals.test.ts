@@ -7,7 +7,7 @@ vi.mock("./supabase/server", () => ({
 }));
 
 import { createServiceClient } from "./supabase/server";
-import { getPaymentSetup, groupRenewals, renewalReminderMessage, stageFor, upiPayLink } from "./renewals";
+import { buildStages, DEFAULT_RENEWAL_WINDOWS, groupRenewals, paymentSetupFrom, renewalReminderMessage, stageFor, upiPayLink } from "./renewals";
 import { createRenewalOrder } from "./memberships";
 import { claimRenewalPayment, receiptNumber } from "./payments";
 import type { RenewalDueDbRow } from "./supabase/database.types";
@@ -26,7 +26,7 @@ describe("renewal stages (ADR-009)", () => {
   it.each([
     [14, "14"], [8, "14"], [7, "7"], [4, "7"], [3, "3"], [1, "3"], [0, "0"], [-1, "overdue"], [-30, "overdue"],
   ])("%i days left → stage %s", (days, stage) => {
-    expect(stageFor(days)).toBe(stage);
+    expect(stageFor(days, buildStages(DEFAULT_RENEWAL_WINDOWS))?.key).toBe(stage);
   });
 
   it("groups most urgent first with expected ₹ (pending amount wins over plan price)", () => {
@@ -35,9 +35,21 @@ describe("renewal stages (ADR-009)", () => {
       expiry_date: "2026-11-01", days_left: days, pending_payment_id: null, pending_amount: null, pending_reference: null, notify_renewal: true, ...over,
     });
     const groups = groupRenewals([row(2), row(3, { pending_payment_id: "p", pending_amount: 2250 }), row(10), row(-2)]);
-    expect(groups.map((g) => g.stage)).toEqual(["overdue", "0", "3", "7", "14"]);
-    expect(groups.find((g) => g.stage === "3")).toMatchObject({ expected: 3250, pending: 1 });
-    expect(groups.find((g) => g.stage === "0")?.rows).toEqual([]);
+    expect(groups.map((g) => g.key)).toEqual(["overdue", "0", "3", "7", "14"]);
+    expect(groups.find((g) => g.key === "3")).toMatchObject({ expected: 3250, pending: 1 });
+    expect(groups.find((g) => g.key === "0")?.rows).toEqual([]);
+  });
+
+  it("follows the owner's windows; windows over 7 days are owner-only", () => {
+    const stages = buildStages([21, 10, 5, 0, -3]);
+    expect(stages.map((s) => [s.key, s.min, s.max, s.memberReminder])).toEqual([
+      ["overdue", -30, -1, true],
+      ["0", 0, 0, true],
+      ["5", 1, 5, true],
+      ["10", 6, 10, false],
+      ["21", 11, 21, false],
+    ]);
+    expect(stageFor(25, stages)).toBeNull();
   });
 });
 
@@ -54,10 +66,8 @@ describe("messages and payment links", () => {
   });
 
   it("ignores a malformed UPI ID instead of showing it", () => {
-    vi.stubEnv("GYM_UPI_ID", "not a upi id");
-    expect(getPaymentSetup("FitZone").upiId).toBeNull();
-    vi.stubEnv("GYM_UPI_ID", "fitzone@okicici");
-    expect(getPaymentSetup("FitZone")).toEqual({ upiId: "fitzone@okicici", payeeName: "FitZone" });
+    expect(paymentSetupFrom("not a upi id", "FitZone").upiId).toBeNull();
+    expect(paymentSetupFrom(" fitzone@okicici ", "FitZone")).toEqual({ upiId: "fitzone@okicici", payeeName: "FitZone" });
   });
 
   it("makes a short receipt number from the payment id", () => {

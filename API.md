@@ -57,7 +57,8 @@ Runs the daily scan (Red List) and builds renewal reminder + follow-ups-due list
 | `refundPayment` | payment_id, reason | Marks payment Refunded and records the reversal as a new audit/membership adjustment entry — the original Paid record is not rewritten silently. Owner only. |
 | `upsertPlan` / `setPlanActive` | plan fields | Price changes affect future orders only; existing orders keep their snapshot amounts. |
 | `upsertAddon` / `adjustStock` / `recordPTSession` | addon fields / order_id | Stock can never go negative; PT session recording fails if `sessions_used = sessions_total` (both guards are in the database UPDATE, migration 010). Add-on edits are Owner only; stock (with a reason, audited) and PT sessions are Owner and front desk. Verifying an add-on payment makes PT/diet orders Active and product orders Completed (collect at the desk). |
-| `updateSettings` | gym profile, threshold, timings, defaults | Owner only. Threshold changes apply from the next scan. |
+| `updateSettings` | gym profile, threshold, timings, defaults | Owner only, audited. Threshold changes apply from the next scan. Renewal windows: 2–8 whole days between −30 and 30, must include 0 and one day before expiry; windows over 7 days are owner-only heads-ups (ADR-009). The gym profile (name, tagline, address, Maps link, phone, opening hours, UPI ID) feeds the landing page, receipts and payment screens. |
+| `updateMemberPreference` (member) | renewal reminders / missed-visit messages / marketing | Saved immediately and audited. Off hides the matching WhatsApp button on Renewals / Red List for staff. Payment confirmations are always allowed. |
 
 ## WhatsApp deep links (no server call)
 

@@ -56,18 +56,21 @@ export function RedListRow({ row, today, gymPhone }: { row: Row; today: string; 
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      {!row.notify_care && <p className="mt-2 text-xs text-muted">Opted out of absence messages — call instead.</p>}
+      <div className={cn("mt-3 grid gap-2", row.notify_care ? "grid-cols-3" : "grid-cols-2")}>
         <a href={`tel:+91${row.member_phone}`} className="btn-secondary inline-flex items-center justify-center gap-2 px-3 text-sm">
           <Phone className="h-4 w-4" aria-hidden /> Call
         </a>
-        <a
-          href={whatsAppLink(row.member_phone, text)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-secondary inline-flex items-center justify-center gap-2 px-3 text-sm"
-        >
-          <MessageCircle className="h-4 w-4" aria-hidden /> WhatsApp
-        </a>
+        {row.notify_care && (
+          <a
+            href={whatsAppLink(row.member_phone, text)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary inline-flex items-center justify-center gap-2 px-3 text-sm"
+          >
+            <MessageCircle className="h-4 w-4" aria-hidden /> WhatsApp
+          </a>
+        )}
         <OutcomeDialog caseId={row.case_id} memberName={row.member_name} today={today} defaultNextDate={addDaysToDate(today, 2)} />
       </div>
     </li>

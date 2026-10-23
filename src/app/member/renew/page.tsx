@@ -21,6 +21,7 @@ export default async function RenewPage() {
     listMemberPayments(memberId, "Renewal"),
     getGymName(),
   ]);
+  const setup = await getPaymentSetup();
   const membership = home?.membership;
 
   if (!membership) {
@@ -34,7 +35,6 @@ export default async function RenewPage() {
   const pending = payments.find((p) => p.status === "Pending");
   const lastFailed = !pending && payments[0]?.status === "Failed" && payments[0]?.orderStatus === "Failed" ? payments[0] : null;
   const justPaid = payments[0]?.status === "Paid" && payments[0].verifiedAt && daysAgoKolkata(payments[0].verifiedAt) <= 7 ? payments[0] : null;
-  const setup = getPaymentSetup(gymName);
   const daysLeft = daysUntilKolkata(membership.expiry_date);
   const offered = plans.filter((p) => p.is_active);
 

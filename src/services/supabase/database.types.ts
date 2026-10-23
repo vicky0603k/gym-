@@ -552,6 +552,11 @@ export type Database = {
           duplicate_window_hours?: number;
           renewal_windows?: number[];
           weekly_goal_default?: number;
+          opening_hours?: string | null;
+          maps_url?: string | null;
+          upi_id?: string | null;
+          upi_name?: string | null;
+          tagline?: string | null;
         };
         Update: Partial<Omit<Settings, "id" | "created_at">>;
         Relationships: [];

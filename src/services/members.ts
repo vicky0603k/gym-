@@ -345,3 +345,53 @@ export async function getMemberHome(memberId: string): Promise<MemberHome | null
     membership: m ? { ...m, planName: names.get(m.plan_id) ?? "Membership" } : null,
   };
 }
+
+export interface MemberPreferences {
+  notifyRenewal: boolean;
+  notifyCare: boolean;
+  marketingConsent: boolean;
+}
+
+/** The member's own message preferences. Throws on a database error. */
+export async function getMemberPreferences(memberId: string): Promise<MemberPreferences | null> {
+  const { data, error } = await createServiceClient()
+    .from("members")
+    .select("notify_renewal, notify_care, marketing_consent")
+    .eq("id", memberId)
+    .maybeSingle();
+  if (error) throw new Error("MEMBER_LOAD_FAILED");
+  return data ? { notifyRenewal: data.notify_renewal, notifyCare: data.notify_care, marketingConsent: data.marketing_consent } : null;
+}
+
+export const preferenceSchema = z.object({
+  key: z.enum(["notifyRenewal", "notifyCare", "marketingConsent"]),
+  value: z.boolean(),
+});
+
+const PREF_COLUMN = { notifyRenewal: "notify_renewal", notifyCare: "notify_care", marketingConsent: "marketing_consent" } as const;
+const PREF_LABEL = { notifyRenewal: "renewal reminders", notifyCare: "missed-visit messages", marketingConsent: "offers and promotions" } as const;
+
+/**
+ * One toggle, saved immediately. Staff screens read it on their next load
+ * (Red List / Renewals hide the WhatsApp button). Audited as a consent record.
+ */
+export async function updateMemberPreference(memberId: string, input: unknown): Promise<ActionResult<void>> {
+  const parsed = preferenceSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: { code: "VALIDATION", message: "That setting couldn't be saved." } };
+  const { key, value } = parsed.data;
+
+  const supabase = createServiceClient();
+  const patch: Partial<Pick<Member, (typeof PREF_COLUMN)[keyof typeof PREF_COLUMN]>> = { [PREF_COLUMN[key]]: value };
+  const { error } = await supabase.from("members").update(patch).eq("id", memberId);
+  if (error) return { ok: false, error: { code: "INVALID_STATE", message: "We couldn't save that. Please try again." } };
+
+  await supabase.from("audit_logs").insert({
+    actor_type: "Member",
+    actor_id: memberId,
+    action: "member.preferences",
+    record_type: "member",
+    record_id: memberId,
+    summary: `Member turned ${value ? "on" : "off"} ${PREF_LABEL[key]}.`,
+  });
+  return { ok: true, data: undefined };
+}
