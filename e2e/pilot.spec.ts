@@ -51,6 +51,8 @@ test.beforeAll(async ({ browser }) => {
 
 test.afterAll(async () => {
   await Promise.all(contexts.map((c) => c.close()));
+  // Test plans must not show on the gym's public website after the run.
+  await admin().from("plans").update({ is_active: false }).like("name", "E2E Plan%");
 });
 
 test("public website and privacy notice", async ({ page }) => {
