@@ -2,7 +2,7 @@
  * Auth helpers — role checks and current-user resolution.
  * All functions run server-side only.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomBytes, scryptSync } from "node:crypto";
 import { z } from "zod";
 import { createServerClient, createServiceClient } from "./supabase/server";
 import type { StaffUser } from "./supabase/database.types";
@@ -27,10 +27,21 @@ export const MEMBER_LOGIN_FAILED =
 const STAFF_LOGIN_FAILED = "Email or password is incorrect.";
 const SERVER_FAILED = "We couldn't log you in right now. Please try again in a minute.";
 
-// Matches seed.sql: encode(digest(pin, 'sha256'), 'hex')
-export function hashPin(pin: string): string {
+// PINs stored before migration 012 (and seed.sql): unsalted sha256 hex. Upgraded on the next login.
+export function legacyPinHash(pin: string): string {
   return createHash("sha256").update(pin).digest("hex");
 }
+
+/**
+ * Salted scrypt, stored as "scrypt$<salt>$<hash>". With only 10,000 PINs an
+ * unsalted fast hash is reversible by anyone who can read the table (GAPS C6).
+ */
+export function hashPin(pin: string, salt: string = randomBytes(16).toString("hex")): string {
+  return `scrypt$${salt}$${scryptSync(pin, salt, 32).toString("hex")}`;
+}
+
+// Hashed for unknown phones too, so response time doesn't reveal which numbers exist.
+const UNKNOWN_PHONE_SALT = "0".repeat(32);
 
 // Member auth users get a synthetic, non-deliverable email; it is never shown or mailed.
 function memberAuthEmail(memberId: string): string {
@@ -49,12 +60,18 @@ export async function memberLogin(input: unknown): Promise<AuthResult> {
   }
 
   const admin = createServiceClient();
+  const { phone, pin } = parsed.data;
+  const { data: salt, error: saltError } = await admin.rpc("member_pin_salt", { p_phone: phone });
+  if (saltError) return { ok: false, error: { code: "UNAUTHENTICATED", message: SERVER_FAILED } };
+  const legacy = salt === "";
   const { data: memberId, error } = await admin.rpc("verify_member_pin", {
-    p_phone: parsed.data.phone,
-    p_pin_hash: hashPin(parsed.data.pin),
+    p_phone: phone,
+    p_pin_hash: legacy ? legacyPinHash(pin) : hashPin(pin, salt ?? UNKNOWN_PHONE_SALT),
   });
   if (error) return { ok: false, error: { code: "UNAUTHENTICATED", message: SERVER_FAILED } };
   if (!memberId) return { ok: false, error: { code: "UNAUTHENTICATED", message: MEMBER_LOGIN_FAILED } };
+  // Best effort: a failed upgrade leaves the old hash, which still works.
+  if (legacy) await admin.from("members").update({ pin_hash: hashPin(pin) }).eq("id", memberId);
 
   const email = memberAuthEmail(memberId);
   const created = await admin.auth.admin.createUser({
@@ -130,12 +147,14 @@ export async function getCurrentStaff(): Promise<CurrentStaff | null> {
     .eq("id", user.id)
     .single();
 
-  if (!staff) return null;
+  // A removed staff member (C1) is treated as logged out.
+  if (!staff || !staff.is_active) return null;
 
   return {
     id: staff.id,
     name: staff.name,
     role: staff.role,
+    is_active: staff.is_active,
     created_at: staff.created_at,
     updated_at: staff.updated_at,
     email: user.email ?? "",

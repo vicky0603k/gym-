@@ -18,7 +18,7 @@ export default async function AddonPayPage({ params }: { params: { paymentId: st
   const title = payment.quantity > 1 ? `${payment.planName} × ${payment.quantity}` : payment.planName;
 
   return (
-    <div className="px-6 py-6 max-w-md mx-auto space-y-4">
+    <div className="mx-auto w-full max-w-md px-4 pb-8 pt-4 space-y-4">
       <Link href="/member/add-ons" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground min-h-[48px]">
         <ArrowLeft className="h-4 w-4" aria-hidden /> Add-ons
       </Link>

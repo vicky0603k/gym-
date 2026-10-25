@@ -85,12 +85,12 @@ export function Scanner() {
 
   const live = state.kind === "starting" || state.kind === "scanning";
   return (
-    <div className="px-6 py-6 max-w-md mx-auto">
+    <div className="mx-auto w-full max-w-md px-4 pb-8 pt-4">
       {state.kind === "result" ? (
         <CheckInResultScreen result={state.result} onScanAgain={start} />
       ) : (
         <>
-          <h1 className="text-2xl font-bold text-foreground mb-1">Check in</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Check in</h1>
           <p className="text-muted mb-5">Point your camera at the QR on the screen at the gym gate.</p>
         </>
       )}
@@ -98,12 +98,12 @@ export function Scanner() {
       {/* html5-qrcode renders the video into this element, so it stays mounted in every state. */}
       <div
         id={READER_ID}
-        className={live ? "overflow-hidden rounded-lg border border-border bg-black aspect-square" : "hidden"}
+        className={live ? "overflow-hidden rounded-lg border border-border bg-foreground aspect-square" : "hidden"}
       />
 
       {state.kind === "idle" && (
         <div className="card p-5 text-center">
-          <Camera className="mx-auto mb-3 h-10 w-10 text-accent" aria-hidden />
+          <Camera className="mx-auto mb-3 h-10 w-10 text-foreground" aria-hidden />
           <p className="text-foreground mb-1">Camera access is needed to scan the gate QR.</p>
           <p className="text-sm text-muted mb-5">Your browser will ask once. The camera is used only while this screen is open.</p>
           <button type="button" className="btn-primary w-full" onClick={start}>
@@ -119,7 +119,7 @@ export function Scanner() {
 
       {state.kind === "submitting" && (
         <div className="flex flex-col items-center py-16 text-center" role="status">
-          <Loader2 className="mb-4 h-12 w-12 animate-spin text-accent" aria-hidden />
+          <Loader2 className="mb-4 h-12 w-12 animate-spin text-foreground" aria-hidden />
           <p className="text-foreground">Checking you in…</p>
         </div>
       )}

@@ -17,9 +17,9 @@ export default async function AssistedCheckInPage({ searchParams }: { searchPara
   const members = q ? (await listMembers({ search: q })).slice(0, MAX_RESULTS) : [];
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl">
+    <div className="mx-auto w-full px-4 pb-8 pt-4 md:px-6 md:pt-6 max-w-3xl">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
-        <h1 className="text-2xl font-bold text-foreground">Assisted check-in</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Assisted check-in</h1>
         <Link href="/owner/qr" className="btn-secondary inline-flex items-center gap-2 text-sm">
           <QrCode className="h-4 w-4" aria-hidden /> Show gate QR
         </Link>

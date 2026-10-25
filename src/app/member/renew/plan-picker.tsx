@@ -50,8 +50,8 @@ export function PlanPicker({
   return (
     <div>
       <fieldset>
-        <legend className="text-lg font-semibold text-foreground mb-3">Choose a plan</legend>
-        <div className="space-y-3">
+        <legend className="mb-2 font-semibold text-foreground">Choose a plan</legend>
+        <div className="space-y-2">
           {plans.map((p) => {
             const final = applyDiscount(p.price, p.discount_pct);
             const active = p.id === selected;
@@ -59,8 +59,8 @@ export function PlanPicker({
               <label
                 key={p.id}
                 className={cn(
-                  "card block cursor-pointer p-4 transition-colors",
-                  active ? "border-accent ring-1 ring-accent" : "hover:border-muted"
+                  "block cursor-pointer rounded-lg border bg-background p-4 transition-colors",
+                  active ? "border-foreground ring-2 ring-foreground" : "border-border hover:border-border-strong"
                 )}
               >
                 <input type="radio" name="plan" value={p.id} className="sr-only" checked={active} onChange={() => setSelected(p.id)} />
@@ -70,7 +70,7 @@ export function PlanPicker({
                     <p className="text-sm text-muted">{p.duration_days} days</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xl font-bold text-foreground tabular-nums">{formatRupees(final)}</p>
+                    <p className="num-display text-3xl text-foreground">{formatRupees(final)}</p>
                     {p.discount_pct > 0 && (
                       <p className="text-xs text-muted">
                         <s>{formatRupees(p.price)}</s> · save {formatRupees(discountAmount(p.price, p.discount_pct))}
@@ -80,7 +80,7 @@ export function PlanPicker({
                 </div>
                 {p.benefits && <p className="mt-2 text-sm text-muted">{p.benefits}</p>}
                 {active && (
-                  <p className="mt-2 flex items-center gap-1.5 text-sm text-accent">
+                  <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-success">
                     <CircleCheck className="h-4 w-4" aria-hidden /> New expiry {formatDisplayDate(computeNewExpiry(currentExpiry, p.duration_days))} once the gym confirms payment
                   </p>
                 )}
@@ -96,7 +96,7 @@ export function PlanPicker({
       <div className="mt-4">
         <FormError message={message} />
       </div>
-      <button type="button" className="btn-primary mt-2 w-full" disabled={!plan || pending} aria-busy={pending} onClick={pay}>
+      <button type="button" className="btn-primary mt-2 w-full min-h-[56px] text-lg" disabled={!plan || pending} aria-busy={pending} onClick={pay}>
         {pending ? "Starting…" : plan ? `Pay ${formatRupees(applyDiscount(plan.price, plan.discount_pct))}` : "Choose a plan to pay"}
       </button>
     </div>

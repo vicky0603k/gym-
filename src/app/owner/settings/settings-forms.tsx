@@ -67,6 +67,7 @@ export function GymProfileForm({ s }: { s: GymSettings }) {
         {text("upiId", "UPI ID for payments", s.upi_id, { autoComplete: "off", placeholder: "gymname@okicici" })}
         {text("upiName", "UPI payee name (optional)", s.upi_name, { maxLength: 60 })}
       </div>
+      {text("gstin", "GSTIN (only if GST-registered)", s.gstin, { autoComplete: "off", maxLength: 15, placeholder: "29ABCDE1234F1Z5" }, "When filled, receipts show the GSTIN and the 18% GST included in the price")}
       <FormError message={message} />
       <Submit pending={pending} />
     </form>
@@ -88,6 +89,14 @@ export function RulesForm({ s }: { s: GymSettings }) {
         hint="Comma separated, e.g. 14, 7, 3, 0, -3. Include 0 (expiry day). Stages over 7 days are a heads-up for you only — members are never messaged that early."
       >
         <input id="renewalWindows" name="renewalWindows" defaultValue={s.renewal_windows.join(", ")} className="input" />
+      </FormField>
+      <FormField
+        label="Paused days added back per year"
+        htmlFor="freezeMaxDaysPerYear"
+        error={errors.freezeMaxDaysPerYear}
+        hint="When a paused membership is resumed, the days it was paused are added to the expiry — up to this many days in any 12 months. 0 = never add days."
+      >
+        <input id="freezeMaxDaysPerYear" name="freezeMaxDaysPerYear" type="number" inputMode="numeric" min={0} max={365} defaultValue={s.freeze_max_days_per_year} className="input max-w-[8rem]" />
       </FormField>
       <FormError message={message} />
       <Submit pending={pending} />

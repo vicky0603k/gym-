@@ -1,4 +1,5 @@
-/** Display a stored 10-digit mobile as "98765 43210". */
+/** Display an Indian mobile as "98765 43210" (accepts "+91 98765 43210" too, so "+91 " is never doubled). */
 export function formatPhone(phone: string): string {
-  return /^\d{10}$/.test(phone) ? `${phone.slice(0, 5)} ${phone.slice(5)}` : phone;
+  const digits = phone.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+  return /^\d{10}$/.test(digits) ? `${digits.slice(0, 5)} ${digits.slice(5)}` : phone;
 }

@@ -111,10 +111,5 @@ describe("claimRenewalPayment", () => {
   });
 });
 
-describe("live database (pending)", () => {
-  it.todo("verifying the same payment twice extends the membership exactly once (TESTING.md #6)");
-  it.todo("a rejected payment extends nothing and the member sees the failed state (TESTING.md #7)");
-  it.todo("renewing Monthly → Yearly moves the membership to the Yearly plan and the receipt shows the new expiry");
-  it.todo("a member can never open another member's receipt");
-  it.todo("paused, cancelled and blocked members are not in the renewals pipeline");
-});
+// Verify twice extends once, reject extends nothing, Monthly → Yearly, receipt isolation, pipeline exclusions:
+// tests/db/payments.test.ts (and receipt isolation over the real API in tests/live/live.test.ts).

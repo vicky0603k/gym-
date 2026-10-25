@@ -100,6 +100,7 @@ export type StaffUser = {
   id: string;
   name: string;
   role: StaffRole;
+  is_active: boolean; // 012
   created_at: string;
   updated_at: string;
 };
@@ -175,8 +176,21 @@ export type Payment = {
   status: PaymentStatus;
   verified_by: string | null;
   verified_at: string | null;
+  method: PaymentMethod; // 012
   created_at: string;
   updated_at: string;
+};
+
+export type PaymentMethod = "UPI" | "Cash";
+
+export type FreezeCredit = {
+  id: string;
+  membership_id: string;
+  member_id: string;
+  days: number;
+  credited_on: string;
+  staff_id: string | null;
+  created_at: string;
 };
 
 export type RenewalOrder = {
@@ -250,6 +264,8 @@ export type Settings = {
   upi_id: string | null;
   upi_name: string | null;
   tagline: string | null;
+  freeze_max_days_per_year: number; // 012
+  gstin: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -350,6 +366,14 @@ export type DashboardKpiRow = {
   payments_pending: number;
 };
 
+export type DataQualityRow = {
+  paid_without_reference: number;
+  active_past_expiry: number;
+  members_without_membership: number;
+  payments_pending_over_3_days: number;
+  stock_below_zero: number;
+};
+
 // ─── Supabase Database type (used with createClient) ───────────────────────
 
 export type Database = {
@@ -389,8 +413,9 @@ export type Database = {
       };
       staff_users: {
         Row: StaffUser;
-        Insert: Omit<StaffUser, "created_at" | "updated_at" | "role"> & {
+        Insert: Omit<StaffUser, "created_at" | "updated_at" | "role" | "is_active"> & {
           role?: StaffRole;
+          is_active?: boolean;
         };
         Update: Partial<Omit<StaffUser, "id" | "created_at">>;
         Relationships: [];
@@ -468,9 +493,10 @@ export type Database = {
         Row: Payment;
         Insert: Omit<
           Payment,
-          "id" | "created_at" | "updated_at" | "provider_ref" | "verified_by" | "verified_at" | "status"
+          "id" | "created_at" | "updated_at" | "provider_ref" | "verified_by" | "verified_at" | "status" | "method"
         > & {
           id?: string;
+          method?: PaymentMethod;
           provider_ref?: string | null;
           verified_by?: string | null;
           verified_at?: string | null;
@@ -539,8 +565,10 @@ export type Database = {
         Row: Settings;
         Insert: Omit<
           Settings,
-          "id" | "created_at" | "updated_at" | "logo_url" | "address" | "phone" | "gym_name" | "timezone" | "no_show_threshold_days" | "qr_rotation_seconds" | "duplicate_window_hours" | "renewal_windows" | "weekly_goal_default" | "opening_hours" | "maps_url" | "upi_id" | "upi_name" | "tagline"
+          "id" | "created_at" | "updated_at" | "logo_url" | "address" | "phone" | "gym_name" | "timezone" | "no_show_threshold_days" | "qr_rotation_seconds" | "duplicate_window_hours" | "renewal_windows" | "weekly_goal_default" | "opening_hours" | "maps_url" | "upi_id" | "upi_name" | "tagline" | "freeze_max_days_per_year" | "gstin"
         > & {
+          freeze_max_days_per_year?: number;
+          gstin?: string | null;
           id?: string;
           logo_url?: string | null;
           address?: string | null;
@@ -559,6 +587,12 @@ export type Database = {
           tagline?: string | null;
         };
         Update: Partial<Omit<Settings, "id" | "created_at">>;
+        Relationships: [];
+      };
+      freeze_credits: {
+        Row: FreezeCredit;
+        Insert: never; // written only by resume_membership() (012)
+        Update: never;
         Relationships: [];
       };
       audit_logs: {
@@ -622,6 +656,41 @@ export type Database = {
       dashboard_kpis: {
         Args: Record<string, never>;
         Returns: DashboardKpiRow;
+      };
+      // Shapes mirror 012_desk_refund_freeze_staff.sql.
+      create_desk_renewal: {
+        Args: { p_member_id: string; p_plan_id: string; p_method: PaymentMethod; p_reference: string | null; p_staff_id: string };
+        Returns:
+          | { ok: true; payment_id: string; reference: string; amount: number }
+          | { ok: false; code: "FORBIDDEN" | "VALIDATION" | "DUPLICATE_REFERENCE" | "NOT_FOUND" | "PLAN_UNAVAILABLE" | "PAYMENT_CLAIMED"; payment_id?: string };
+      };
+      refund_payment: {
+        Args: { p_payment_id: string; p_staff_id: string; p_reason: string; p_reverse: boolean };
+        Returns: { ok: true; new_expiry: string | null } | { ok: false; code: "FORBIDDEN" | "VALIDATION" | "NOT_FOUND" | "ALREADY_REFUNDED" | "INVALID_STATE" };
+      };
+      resume_membership: {
+        Args: { p_membership_id: string; p_staff_id: string };
+        Returns: { ok: true; days_added: number; new_expiry: string } | { ok: false; code: "FORBIDDEN" | "INVALID_STATE" };
+      };
+      set_member_status: {
+        Args: { p_member_id: string; p_action: "Cancel" | "Block" | "Reactivate"; p_reason: string; p_staff_id: string };
+        Returns: { ok: true; status: MemberStatus } | { ok: false; code: "FORBIDDEN" | "VALIDATION" | "NOT_FOUND" | "INVALID_STATE" };
+      };
+      anonymise_member: {
+        Args: { p_member_id: string; p_staff_id: string };
+        Returns: { ok: true } | { ok: false; code: "FORBIDDEN" | "NOT_FOUND" | "INVALID_STATE" };
+      };
+      backfill_attendance: {
+        Args: { p_member_id: string; p_at: string; p_reason: string; p_staff_id: string };
+        Returns: { ok: true; attendance_id: string; case_resolved: boolean } | { ok: false; code: "FORBIDDEN" | "VALIDATION" | "NOT_FOUND" | "DUPLICATE_CHECKIN" };
+      };
+      member_pin_salt: {
+        Args: { p_phone: string };
+        Returns: string | null;
+      };
+      data_quality_issues: {
+        Args: Record<string, never>;
+        Returns: DataQualityRow;
       };
       // Shapes mirror 009_renewals.sql.
       create_renewal_order: {

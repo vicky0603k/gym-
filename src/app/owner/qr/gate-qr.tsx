@@ -94,22 +94,22 @@ export function GateQr() {
       </Link>
 
       <h1 className="flex items-center gap-3 text-2xl font-bold text-foreground md:text-4xl">
-        <ScanLine className="h-8 w-8 text-accent md:h-10 md:w-10" aria-hidden /> Scan to check in
+        <ScanLine className="h-8 w-8 text-foreground md:h-10 md:w-10" aria-hidden /> Scan to check in
       </h1>
 
-      <div className="flex aspect-square w-[min(82vw,62vh,640px)] items-center justify-center rounded-2xl bg-white p-3">
+      <div className="flex aspect-square w-[min(82vw,62vh,640px)] items-center justify-center rounded-lg border-2 border-foreground bg-background p-3">
         {valid ? (
           // eslint-disable-next-line @next/next/no-img-element -- data: URL generated on the device
           <img src={current.image} alt="Gate check-in QR code" className="h-full w-full" />
         ) : error ? (
-          <div className="px-6 text-center text-base text-neutral-800">
+          <div className="px-6 text-center text-base text-foreground">
             <p className="mb-4 font-semibold">{error}</p>
             <button type="button" onClick={load} className="btn-primary inline-flex items-center gap-2">
               <RotateCw className="h-4 w-4" aria-hidden /> Retry
             </button>
           </div>
         ) : (
-          <div className="h-full w-full animate-pulse rounded-xl bg-neutral-200" aria-label="Loading QR" />
+          <div className="h-full w-full animate-pulse rounded-md bg-surface-2" aria-label="Loading QR" />
         )}
       </div>
 
@@ -125,7 +125,7 @@ export function GateQr() {
             strokeLinecap="round"
             strokeDasharray={C}
             strokeDashoffset={C * (1 - fraction)}
-            className={secondsLeft <= 5 ? "stroke-warning" : "stroke-accent"}
+            className={secondsLeft <= 5 ? "stroke-warning" : "stroke-foreground"}
             style={{ transition: "stroke-dashoffset 250ms linear" }}
           />
         </svg>

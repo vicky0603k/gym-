@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Download, Share, X } from "lucide-react";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 
 /**
@@ -8,9 +9,29 @@ import { useInstallPrompt } from "@/hooks/useInstallPrompt";
  * check-in, never as a blocking popup on first load (DESIGN.md §7).
  * Different steps for Android Chrome vs iOS Safari.
  */
+const SEEN_KEY = "install-prompt-dismissed";
+
 export function InstallPrompt({ show }: { show: boolean }) {
   const { canPrompt, isInstalled, promptInstall } = useInstallPrompt();
-  const [dismissed, setDismissed] = useState(false);
+  // Starts hidden until storage is read, so a dismissed prompt never flashes.
+  const [dismissed, setDismissedState] = useState(true);
+
+  useEffect(() => {
+    try {
+      setDismissedState(localStorage.getItem(SEEN_KEY) === "1");
+    } catch {
+      setDismissedState(false);
+    }
+  }, []);
+
+  const setDismissed = (value: boolean) => {
+    setDismissedState(value);
+    try {
+      localStorage.setItem(SEEN_KEY, "1");
+    } catch {
+      // Private mode: the prompt may show again next time, which is harmless.
+    }
+  };
 
   if (!show || isInstalled || dismissed) return null;
 
@@ -21,24 +42,23 @@ export function InstallPrompt({ show }: { show: boolean }) {
 
   if (isIOS) {
     return (
-      <div className="fixed bottom-4 left-4 right-4 z-50 card p-4 animate-slide-up">
+      <div className="fixed bottom-20 left-4 right-4 z-50 rounded-lg bg-foreground p-4 text-background animate-slide-up">
         <div className="flex items-start gap-3">
-          <span className="text-2xl" aria-hidden>📱</span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground" aria-hidden>
+            <Share className="h-5 w-5" />
+          </span>
           <div className="flex-1">
-            <p className="font-semibold text-foreground text-sm mb-1">
-              Add to Home Screen
-            </p>
-            <p className="text-xs text-muted leading-relaxed">
-              Tap the Share button, then &ldquo;Add to Home Screen&rdquo; to
-              install the app.
+            <p className="font-semibold mb-1">Add the gym app to your Home Screen</p>
+            <p className="text-sm text-background/70 leading-relaxed">
+              Tap Share, then &ldquo;Add to Home Screen&rdquo;. Next time, check in with one tap.
             </p>
           </div>
           <button
-            className="btn-ghost text-xs px-2 py-1"
+            className="-mr-2 -mt-2 flex h-12 w-12 items-center justify-center rounded-md hover:bg-background/10"
             onClick={() => setDismissed(true)}
             aria-label="Dismiss"
           >
-            ✕
+            <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
       </div>
@@ -48,31 +68,23 @@ export function InstallPrompt({ show }: { show: boolean }) {
   if (!canPrompt) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 card p-4 animate-slide-up">
-      <div className="flex items-center gap-3">
-        <span className="text-2xl" aria-hidden>💪</span>
+    <div className="fixed bottom-20 left-4 right-4 z-50 rounded-lg bg-foreground p-4 text-background animate-slide-up">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground" aria-hidden>
+          <Download className="h-5 w-5" />
+        </span>
         <div className="flex-1">
-          <p className="font-semibold text-foreground text-sm mb-1">
-            Install the app
-          </p>
-          <p className="text-xs text-muted">
-            Quick access to check-in and your fitness goals.
-          </p>
+          <p className="font-semibold mb-1">Install the gym app</p>
+          <p className="text-sm text-background/70">Opens straight to check-in, like any other app on your phone.</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            className="btn-ghost text-xs px-2 py-1"
-            onClick={() => setDismissed(true)}
-          >
-            Not now
-          </button>
-          <button
-            className="btn-primary text-xs px-4 py-2"
-            onClick={promptInstall}
-          >
-            Install
-          </button>
-        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button className="min-h-[48px] rounded-lg font-medium text-background hover:bg-background/10" onClick={() => setDismissed(true)}>
+          Not now
+        </button>
+        <button className="btn-primary" onClick={() => promptInstall().then(() => setDismissed(true))}>
+          Install
+        </button>
       </div>
     </div>
   );

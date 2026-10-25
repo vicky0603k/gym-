@@ -34,7 +34,7 @@ export function PreferenceToggles({ initial }: { initial: MemberPreferences }) {
   }
 
   return (
-    <ul className="card divide-y divide-border">
+    <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-background">
       {ITEMS.map((item) => (
         <li key={item.key} className="flex items-center gap-4 px-4 py-4">
           <span className="flex-1">
@@ -52,7 +52,7 @@ export function PreferenceToggles({ initial }: { initial: MemberPreferences }) {
             onClick={() => toggle(item.key)}
             className={cn(
               "relative h-8 w-14 shrink-0 rounded-full transition-colors disabled:opacity-60",
-              prefs[item.key] ? "bg-accent" : "border border-border bg-surface-2"
+              prefs[item.key] ? "bg-accent" : "border border-border-strong bg-surface-2"
             )}
           >
             <span

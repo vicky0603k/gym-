@@ -59,6 +59,6 @@ export const config = {
      * - public folder
      * - manifest, sw
      */
-    "/((?!_next/static|_next/image|favicon.ico|icons|images|sw.js|manifest.json).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|images|sw.js|offline.html|manifest.json).*)",
   ],
 };

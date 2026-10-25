@@ -247,47 +247,23 @@ export async function pauseMembership(params: {
 }
 
 /**
- * Resume a paused membership: freeze_end = today Kolkata, membership Active,
- * member Active. Expiry is not extended (freeze rules are still open in PRD.md).
+ * Resume a paused membership in one transaction (resume_membership(), migration 012):
+ * membership Active, member Active, and the paused days added to the expiry up to
+ * the owner's yearly limit (settings.freeze_max_days_per_year). Audited.
  */
 export async function resumeMembership(params: {
   membershipId: string;
   memberId: string;
   staffId: string;
-}): Promise<ActionResult<void>> {
-  const supabase = createServiceClient();
-
-  const { data: resumed, error: resumeError } = await supabase
-    .from("memberships")
-    .update({ status: "Active", freeze_end: todayKolkata() })
-    .eq("id", params.membershipId)
-    .eq("status", "Frozen")
-    .select("id");
-  if (resumeError) return STATUS_SAVE_FAILED;
-  if (!resumed?.length) {
-    return { ok: false, error: { code: "INVALID_STATE", message: "This membership is not paused." } };
-  }
-
-  const { error: memberError } = await supabase
-    .from("members")
-    .update({ status: "Active" })
-    .eq("id", params.memberId);
-  if (memberError) {
-    await supabase
-      .from("memberships")
-      .update({ status: "Frozen", freeze_end: null })
-      .eq("id", params.membershipId);
-    return STATUS_SAVE_FAILED;
-  }
-
-  await supabase.from("audit_logs").insert({
-    actor_type: "Staff",
-    actor_id: params.staffId,
-    action: "membership.resumed",
-    record_type: "membership",
-    record_id: params.membershipId,
-    summary: "Membership resumed.",
+}): Promise<ActionResult<{ daysAdded: number; newExpiry: string }>> {
+  const { data, error } = await createServiceClient().rpc("resume_membership", {
+    p_membership_id: params.membershipId,
+    p_staff_id: params.staffId,
   });
-
-  return { ok: true, data: undefined };
+  if (error || !data) return STATUS_SAVE_FAILED;
+  if (!data.ok) {
+    const message = data.code === "FORBIDDEN" ? "Only the owner can resume a membership." : "This membership is not paused.";
+    return { ok: false, error: { code: data.code, message } };
+  }
+  return { ok: true, data: { daysAdded: data.days_added, newExpiry: data.new_expiry } };
 }

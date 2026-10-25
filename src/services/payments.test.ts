@@ -8,6 +8,7 @@ vi.mock("./supabase/server", () => ({
 
 import { createServiceClient } from "./supabase/server";
 import { verifyPayment, rejectPayment } from "./payments";
+import { paymentLabel } from "./payment-labels";
 
 const rpc = vi.fn();
 beforeEach(() => {
@@ -91,5 +92,16 @@ describe("rejectPayment", () => {
     const result = await rejectPayment({ paymentId: "p1", staffId: "s1", reason: "x" });
 
     expect(result).toMatchObject({ ok: false, error: { code: "INVALID_STATE" } });
+  });
+});
+
+describe("paymentLabel (what the member sees)", () => {
+  it.each([
+    [{ status: "Failed", orderStatus: "Failed" }, "Not confirmed"],
+    [{ status: "Failed", orderStatus: "Cancelled" }, "Replaced"],
+    [{ status: "Refunded", orderStatus: "Paid" }, "Refunded"],
+    [{ status: "Pending", orderStatus: "Pending" }, "Awaiting confirmation"],
+  ] as const)("%o → %s (TESTING.md #7)", (p, label) => {
+    expect(paymentLabel(p)).toBe(label);
   });
 });

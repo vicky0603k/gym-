@@ -24,8 +24,10 @@ export function ReviewDialog({
   amount,
   claimedRef,
   purpose,
+  method = "UPI",
 }: {
   purpose: "Renewal" | "AddOn";
+  method?: "UPI" | "Cash";
   mode: Mode;
   paymentId: string;
   memberName: string;
@@ -88,8 +90,8 @@ export function ReviewDialog({
         {verify ? "Verify" : "Reject"}
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 animate-fade-in" />
-        <Dialog.Content className="fixed z-50 inset-x-4 bottom-4 sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md card p-5 animate-slide-up">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/50 animate-fade-in" />
+        <Dialog.Content className="fixed z-50 inset-x-4 bottom-4 sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md rounded-lg border border-border bg-background p-5 shadow-xl animate-slide-up">
           <div className="flex items-start justify-between gap-3 mb-2">
             <Dialog.Title className="text-lg font-semibold text-foreground">
               {verify ? `Verify ${formatRupees(amount)} from ${memberName}?` : `Reject ${memberName}'s payment?`}
@@ -100,7 +102,7 @@ export function ReviewDialog({
           </div>
           <Dialog.Description className="text-sm text-muted mb-4">
             {verify
-              ? `Only verify after you see ${formatRupees(amount)} in your bank or UPI app. ${
+              ? `${method === "Cash" ? `Only verify after you have counted ${formatRupees(amount)} in cash.` : `Only verify after you see ${formatRupees(amount)} in your bank or UPI app.`} ${
                   purpose === "Renewal" ? `${planName} will be added to their membership straight away.` : `${planName} starts straight away.`
                 }`
               : purpose === "Renewal"
@@ -111,10 +113,16 @@ export function ReviewDialog({
             <input type="hidden" name="paymentId" value={paymentId} />
             {verify ? (
               <FormField
-                label="UPI reference in your bank app"
+                label={method === "Cash" ? "Cash receipt number" : "UPI reference in your bank app"}
                 htmlFor="providerRef"
                 error={errors.providerRef}
-                hint={claimedRef ? `The member entered ${claimedRef}. Check it matches.` : "The member hasn't sent a reference."}
+                hint={
+                  method === "Cash"
+                    ? "Given by the app when the desk recorded the cash."
+                    : claimedRef
+                      ? `The reference entered is ${claimedRef}. Check it matches your bank app.`
+                      : "The member hasn't sent a reference."
+                }
               >
                 <input id="providerRef" name="providerRef" defaultValue={claimedRef ?? ""} maxLength={40} autoComplete="off" className="input uppercase" />
               </FormField>

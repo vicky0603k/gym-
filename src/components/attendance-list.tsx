@@ -34,16 +34,22 @@ export function AttendanceList({
   return (
     <>
       {rows.length === 0 ? (
-        <p className="card p-5 text-sm text-muted">No older check-ins.</p>
+        <p className="rounded-lg bg-surface p-5 text-sm text-muted">No older check-ins.</p>
       ) : (
-        <ul className="card divide-y divide-border">
+        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-background">
           {rows.map((v) => (
-            <li key={v.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div>
-                <p className="font-medium text-foreground">{formatDisplayDate(toKolkataDateString(v.checkin_at))}</p>
-                <p className="text-sm text-muted">{formatDisplayTime(v.checkin_at)}</p>
-              </div>
-              <span className="text-sm text-muted">{v.source === "QR" ? "QR scan" : "Front desk"}</span>
+            <li key={v.id} className="flex min-h-[60px] items-center gap-3 px-4 py-3">
+              <span className="w-12 shrink-0 text-center">
+                <span className="num-display block text-2xl text-foreground">{formatDisplayDate(toKolkataDateString(v.checkin_at)).split(" ")[0]}</span>
+                <span className="block text-xs text-muted">{formatDisplayDate(toKolkataDateString(v.checkin_at)).split(" ")[1]}</span>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium text-foreground">{formatDisplayDate(toKolkataDateString(v.checkin_at))}</span>
+                <span className="block text-sm text-muted">{formatDisplayTime(v.checkin_at)}</span>
+              </span>
+              <span className={v.source === "QR" ? "text-sm text-muted" : "rounded-full bg-surface-2 px-2.5 py-1 text-xs font-semibold text-foreground"}>
+                {v.source === "QR" ? "QR scan" : "Front desk"}
+              </span>
             </li>
           ))}
         </ul>

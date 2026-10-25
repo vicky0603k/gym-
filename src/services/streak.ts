@@ -64,11 +64,13 @@ export function summariseWeeks(input: {
     visitsByWeek.set(w, (visitsByWeek.get(w) ?? 0) + 1);
   }
 
+  // freeze_end is the resume day: the member is active again from that day, so a
+  // pause covers [start, end) and one resumed the day it started covers nothing.
   const overlapsPause = (weekStart: string) => {
     const weekEnd = addDaysToDate(weekStart, 6);
-    return pauses.some((p) => p.start <= weekEnd && (p.end ?? today) >= weekStart);
+    return pauses.some((p) => p.start <= weekEnd && (p.end === null || (p.end > weekStart && p.end > p.start)));
   };
-  const pausedNow = pauses.some((p) => p.start <= today && (p.end === null || p.end >= today));
+  const pausedNow = pauses.some((p) => p.start <= today && (p.end === null || p.end > today));
 
   // Oldest → newest, never before the join week.
   const weeks: WeekSummary[] = [];

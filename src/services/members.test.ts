@@ -9,7 +9,7 @@ vi.mock("./supabase/server", () => ({
 import { createServiceClient } from "./supabase/server";
 import { hashPin } from "./auth";
 import { pauseMembership } from "./memberships";
-import { createMember, createMemberSchema, pauseMember, updateMember } from "./members";
+import { correctExpiry, createMember, createMemberSchema, pauseMember, resetMemberPin, updateMember } from "./members";
 
 // Chainable stand-in for a Supabase query: every method returns itself and
 // awaiting it resolves to `result`. Calls are recorded per table.
@@ -105,7 +105,9 @@ describe("createMember", () => {
     const result = await createMember(validMember, "s1");
 
     expect(result).toEqual({ ok: true, data: { memberId: MEMBER_ID, planName: "Monthly", expiryDate: "2026-11-22" } });
-    expect(inserted("members")).toMatchObject({ pin_hash: hashPin("4821"), join_date: "2026-10-23", assigned_trainer_id: null });
+    expect(inserted("members")).toMatchObject({ pin_hash: expect.stringMatching(/^scrypt\$/), join_date: "2026-10-23", assigned_trainer_id: null });
+    const stored = inserted("members").pin_hash as string;
+    expect(hashPin("4821", stored.split("$")[1])).toBe(stored);
     expect(inserted("members")).not.toHaveProperty("pin");
     expect(inserted("memberships")).toMatchObject({
       member_id: MEMBER_ID,
@@ -180,10 +182,82 @@ describe("pause without a reason", () => {
   });
 });
 
-// Need a connected Supabase project — run after the database is connected.
-describe("live database (pending)", () => {
-  it.todo("members.phone unique constraint returns 23505 for a real duplicate phone");
-  it.todo("a newly added member logs in with phone + PIN and sees the correct plan and expiry");
-  it.todo("a member session cannot read another member's row or memberships (RLS)");
-  it.todo("an inactive plan is not offered on the Add member form");
+describe("resetMemberPin", () => {
+  it.each([{}, { pin: "12" }, { pin: "12a4" }])("rejects %o before any database call", async (input) => {
+    expect(await resetMemberPin(MEMBER_ID, input, "s1")).toMatchObject({ ok: false, error: { code: "VALIDATION" } });
+    expect(createServiceClient).not.toHaveBeenCalled();
+  });
+
+  it("stores only the hash, clears the lockout and audits without the PIN", async () => {
+    results.members = [{ data: [{ name: "Neha Verma" }], error: null }];
+
+    expect(await resetMemberPin(MEMBER_ID, { pin: "5512" }, "s1")).toEqual({ ok: true, data: undefined });
+    const update = calls.members.find(([m]) => m === "update")?.[1][0] as Record<string, unknown>;
+    expect(update).toMatchObject({ pin_failed_attempts: 0, pin_locked_until: null });
+    expect(hashPin("5512", (update.pin_hash as string).split("$")[1])).toBe(update.pin_hash);
+    expect(inserted("audit_logs")).toMatchObject({ action: "member.pin_reset", record_id: MEMBER_ID });
+    expect(JSON.stringify(inserted("audit_logs"))).not.toContain("5512");
+  });
+
+  it("reports a missing member and writes no audit row", async () => {
+    results.members = [{ data: [], error: null }];
+    expect(await resetMemberPin(MEMBER_ID, { pin: "5512" }, "s1")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect(calls.audit_logs).toBeUndefined();
+  });
 });
+
+describe("correctExpiry", () => {
+  const membership = { id: "m1", start_date: "2026-09-01", expiry_date: "2026-10-01", status: "Expired" };
+
+  it.each([
+    [{ expiryDate: "2026-11-01" }, "reason"],
+    [{ expiryDate: "2026-11-01", reason: "  " }, "reason"],
+    [{ expiryDate: "1 Nov", reason: "Typo" }, "expiryDate"],
+  ])("rejects %o before any database call", async (input, field) => {
+    const result = await correctExpiry(MEMBER_ID, input, "s1");
+    expect(result).toMatchObject({ ok: false, error: { code: "VALIDATION", fields: { [field]: expect.any(String) } } });
+    expect(createServiceClient).not.toHaveBeenCalled();
+  });
+
+  it("refuses a date on or before the start date", async () => {
+    results.memberships = [{ data: membership, error: null }];
+    const result = await correctExpiry(MEMBER_ID, { expiryDate: "2026-09-01", reason: "Typo" }, "s1");
+    expect(result).toMatchObject({ ok: false, error: { fields: { expiryDate: "The expiry must be after the start date." } } });
+    expect(calls.memberships.map(([m]) => m)).not.toContain("update");
+  });
+
+  it("re-opens an expired membership moved into the future and audits old and new dates", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-23T06:00:00Z"));
+    results.memberships = [{ data: membership, error: null }, { data: [{ id: "m1" }], error: null }];
+
+    const result = await correctExpiry(MEMBER_ID, { expiryDate: "2026-11-01", reason: " Typed the wrong month " }, "s1");
+
+    expect(result).toEqual({ ok: true, data: undefined });
+    expect(calls.memberships.find(([m]) => m === "update")?.[1][0]).toEqual({ expiry_date: "2026-11-01", status: "Active" });
+    expect(calls.members.find(([m]) => m === "update")?.[1][0]).toEqual({ status: "Active" });
+    expect(inserted("audit_logs")).toMatchObject({
+      action: "membership.expiry_corrected",
+      summary: "Expiry corrected from 2026-10-01 to 2026-11-01. Reason: Typed the wrong month",
+    });
+  });
+
+  it("only changes the date of an active membership", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-23T06:00:00Z"));
+    results.memberships = [{ data: { ...membership, status: "Active", expiry_date: "2026-12-01" }, error: null }, { data: [{ id: "m1" }], error: null }];
+
+    expect(await correctExpiry(MEMBER_ID, { expiryDate: "2026-11-15", reason: "Wrong plan length" }, "s1")).toMatchObject({ ok: true });
+    expect(calls.memberships.find(([m]) => m === "update")?.[1][0]).toEqual({ expiry_date: "2026-11-15" });
+    expect(calls.members).toBeUndefined();
+  });
+
+  it("writes no audit row when the date changed underneath (concurrent edit)", async () => {
+    results.memberships = [{ data: { ...membership, status: "Active" }, error: null }, { data: [], error: null }];
+    expect(await correctExpiry(MEMBER_ID, { expiryDate: "2026-11-15", reason: "Typo" }, "s1")).toMatchObject({ ok: false });
+    expect(calls.audit_logs).toBeUndefined();
+  });
+});
+
+// Duplicate phone, RLS isolation, inactive plans: tests/db/members-addons.test.ts.
+// New member logs in with phone + PIN and sees plan and expiry: tests/live/live.test.ts and e2e/pilot.spec.ts.

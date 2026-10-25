@@ -46,12 +46,12 @@ export function BuyDialog({ item }: { item: CatalogueItem }) {
         setMessage(undefined);
       }}
     >
-      <Dialog.Trigger className="btn-primary w-full text-sm" disabled={!item.available}>
+      <Dialog.Trigger className="btn-dark w-full" disabled={!item.available}>
         {item.available ? `Buy · ${formatRupees(item.price)}` : item.unavailableReason}
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 animate-fade-in" />
-        <Dialog.Content className="fixed z-50 inset-x-4 bottom-4 max-h-[90vh] overflow-y-auto sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md card p-5 animate-slide-up">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/50 animate-fade-in" />
+        <Dialog.Content className="fixed z-50 inset-x-4 bottom-4 max-h-[90vh] overflow-y-auto sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md rounded-lg border border-border bg-background p-5 shadow-xl animate-slide-up">
           <div className="flex items-start justify-between gap-3 mb-2">
             <Dialog.Title className="text-lg font-semibold text-foreground">{item.title}</Dialog.Title>
             <Dialog.Close className="btn-ghost -mt-2 -mr-2 px-3" aria-label="Close">

@@ -26,7 +26,7 @@ export function NavLink({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={cn(className, active ? "text-accent" : "text-muted hover:text-foreground")}
+      className={cn(className, "group", active ? "text-foreground font-semibold" : "text-muted hover:text-foreground")}
     >
       {children}
     </Link>

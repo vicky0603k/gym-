@@ -5,7 +5,7 @@ Security and privacy rules for this project. These are requirements, not suggest
 ## 1. Authentication
 
 - Owner / front-desk: Supabase Auth, email + strong password. Passwords are never stored or handled by application code.
-- Member: phone number + 4-digit PIN, stored only as a hash. Login failures return one generic message (never "phone not found" vs "wrong PIN").
+- Member: phone number + 4-digit PIN, stored only as a salted scrypt hash (`scrypt$salt$hash`, migration 012). Unknown phones are hashed too, so timing doesn't reveal which numbers exist. Login failures return one generic message (never "phone not found" vs "wrong PIN").
 - PIN brute force: after repeated failures for a phone number, apply a cooldown and surface a staff-assisted reset. PIN reset is done by staff in person/at the desk and is audit-logged.
 - Sessions: use the platform's secure, httpOnly cookie mechanisms. Never store tokens or PINs in `localStorage`.
 
@@ -56,6 +56,7 @@ Security and privacy rules for this project. These are requirements, not suggest
 
 - The cron endpoint rejects any call without the correct `CRON_SECRET` bearer token.
 - Keep dependencies updated; run `npm audit` before the pilot launch and fix high-severity issues.
+- Status 25 Oct 2026: Next.js moved to 14.2.35 (fixes the critical middleware authorization bypass and the other 14.x advisories); the unused image optimizer is switched off (`images.unoptimized`). Still open, needing a major upgrade (owner decision): remaining Next.js advisories fixed only in 15.5+, zod < 4.6.6 (memory use on oversized input — our inputs are small form fields), and build-time-only Serwist/PostCSS.
 - Error responses never expose stack traces, SQL, table names, or whether a phone number exists in the system.
 - Rate-limit sensitive actions at the platform layer where available (login attempts, invalid QR attempts).
 

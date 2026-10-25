@@ -79,6 +79,15 @@ describe("summariseWeeks", () => {
     expect(s.recentWeeks.find((w) => w.weekStart === "2026-10-12")?.result).toBe("met");
   });
 
+  it("a member resumed today is not on hold; a pause resumed the same day pauses nothing", () => {
+    const s = summariseWeeks({ ...base, checkinDates: [], pauses: [{ start: TODAY, end: TODAY }] });
+    expect(s.pausedNow).toBe(false);
+    expect(s.recentWeeks.at(-1)?.result).toBe("current");
+    const earlier = summariseWeeks({ ...base, checkinDates: [], pauses: [{ start: "2026-10-14", end: "2026-10-19" }] });
+    expect(earlier.recentWeeks.find((w) => w.weekStart === "2026-10-12")?.result).toBe("paused");
+    expect(earlier.recentWeeks.at(-1)?.result).toBe("current"); // resumed Monday 19 Oct: this week is live
+  });
+
   it("backdated attendance lands in its own week and changes that week's count", () => {
     const before = summariseWeeks({ ...base, checkinDates: visits("2026-10-12", 2) });
     const after = summariseWeeks({ ...base, checkinDates: [...visits("2026-10-12", 2), "2026-10-18"] });
@@ -113,8 +122,5 @@ describe("updateWeeklyGoalDefault", () => {
   });
 });
 
-describe("live database (pending)", () => {
-  it.todo("inserting a backdated attendance row changes that week on member home");
-  it.todo("a member paused for a whole week sees that week as paused, not missed");
-  it.todo("changing the default weekly target pre-fills the Add member form and writes an audit row");
-});
+// A backdated visit counts toward its week: tests/db/status-freeze.test.ts.
+// Paused weeks and the default-target form: e2e/pilot.spec.ts.

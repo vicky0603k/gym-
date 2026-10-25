@@ -99,7 +99,7 @@ export function AddonForm({ addon, trainers }: { addon?: Addon; trainers: Traine
         ))}
 
       <label className="flex items-center gap-3 min-h-[48px] cursor-pointer">
-        <input type="checkbox" name="isActive" defaultChecked={addon?.is_active ?? true} className="h-5 w-5 accent-[#B5FF47]" />
+        <input type="checkbox" name="isActive" defaultChecked={addon?.is_active ?? true} className="h-5 w-5 accent-foreground" />
         <span>
           <span className="block text-foreground">Offered to members</span>
           <span className="block text-xs text-muted">Switch off to hide it. Existing orders are not changed.</span>

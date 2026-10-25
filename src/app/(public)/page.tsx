@@ -39,38 +39,49 @@ export default async function LandingPage() {
   const offered = plans.filter((p) => p.is_active);
   const join = s.phone ? whatsAppLink(s.phone, `Hi, I'd like to join ${name}. Please share the details.`) : null;
   const hours = s.opening_hours?.split("\n").map((l) => l.trim()).filter(Boolean) ?? [];
+  const cheapest = [...offered].sort((a, b) => a.duration_days - b.duration_days)[0];
 
   return (
     <div className="min-h-screen">
-      <section className="px-6 pt-16 pb-10">
-        <div className="mx-auto max-w-3xl md:grid md:grid-cols-2 md:items-center md:gap-10">
-          <div className="text-center md:text-left">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent md:mx-0" aria-hidden>
-              <span className="text-2xl font-black text-accent-foreground">{name.trim()[0]?.toUpperCase()}</span>
-            </div>
-            <h1 className="mb-3 text-3xl font-bold text-foreground md:text-4xl">{name}</h1>
-            {s.tagline && <p className="text-lg leading-relaxed text-muted">{s.tagline}</p>}
-            {s.address && <p className="mt-2 text-sm text-muted">{s.address}</p>}
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row md:justify-start">
+      <section className="bg-foreground px-4 pb-12 pt-14 text-background">
+        <div className="mx-auto max-w-3xl md:grid md:grid-cols-[1.4fr_1fr] md:items-end md:gap-10">
+          <div>
+            <h1 className="num-display break-words text-6xl uppercase md:text-7xl">{name}</h1>
+            {s.tagline && <p className="mt-4 text-lg leading-relaxed text-background/80">{s.tagline}</p>}
+            {s.address && (
+              <p className="mt-3 flex items-start gap-2 text-sm text-background/70">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> {s.address}
+              </p>
+            )}
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               {join && (
-                <a href={join} target="_blank" rel="noopener noreferrer" className="btn-primary inline-flex items-center justify-center gap-2">
+                <a href={join} target="_blank" rel="noopener noreferrer" className="btn-primary">
                   <MessageCircle className="h-5 w-5" aria-hidden /> Join — message us
                 </a>
               )}
-              <Link href="/login" className={join ? "btn-secondary" : "btn-primary"}>
+              <Link
+                href="/login"
+                className={join ? "btn-secondary border-background/40 bg-transparent text-background hover:bg-background/10" : "btn-primary"}
+              >
                 Member login
               </Link>
             </div>
           </div>
-          {/* Designed panel in place of photos until the gym's own are added (docs/assets.md). */}
-          <div className="mt-10 hidden aspect-square rounded-3xl border border-border bg-gradient-to-br from-accent/25 via-surface to-background p-8 md:mt-0 md:flex md:flex-col md:justify-between" aria-hidden>
-            <Dumbbell className="h-16 w-16 text-accent" />
-            <p className="text-2xl font-bold leading-snug text-foreground">Train consistently. Track every visit. Hit your weekly goal.</p>
-          </div>
+          {/* Until the gym's own photos arrive (docs/assets.md): the real starting price, card-style. */}
+          {cheapest && (
+            <div className="mt-10 rounded-lg border border-background/20 p-5 md:mt-0">
+              <Dumbbell className="h-7 w-7 text-accent" aria-hidden />
+              <p className="mt-4 text-sm text-background/70">Memberships from</p>
+              <p className="num-display text-5xl text-accent">{formatRupees(applyDiscount(cheapest.price, cheapest.discount_pct))}</p>
+              <p className="mt-1 text-sm text-background/70">
+                {cheapest.name} · {durationLabel(cheapest.duration_days)}
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
-      <section className="px-6 py-8" aria-labelledby="plans-heading">
+      <section className="px-4 pb-8 pt-10" aria-labelledby="plans-heading">
         <div className="mx-auto max-w-3xl">
           <h2 id="plans-heading" className="mb-4 text-xl font-bold text-foreground">Membership plans</h2>
           {offered.length === 0 ? (
@@ -85,7 +96,7 @@ export default async function LandingPage() {
                       <p className="text-sm text-muted">{durationLabel(p.duration_days)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xl font-bold tabular-nums text-accent">{formatRupees(applyDiscount(p.price, p.discount_pct))}</p>
+                      <p className="num-display text-3xl text-foreground">{formatRupees(applyDiscount(p.price, p.discount_pct))}</p>
                       {p.discount_pct > 0 && (
                         <p className="text-xs text-muted">
                           <s>{formatRupees(p.price)}</s> · {p.discount_pct}% off
@@ -102,10 +113,10 @@ export default async function LandingPage() {
       </section>
 
       {trainers.length > 0 && (
-        <section className="px-6 py-8" aria-labelledby="trainers-heading">
+        <section className="px-4 py-8" aria-labelledby="trainers-heading">
           <div className="mx-auto max-w-3xl">
             <h2 id="trainers-heading" className="mb-4 flex items-center gap-2 text-xl font-bold text-foreground">
-              <Users className="h-5 w-5 text-accent" aria-hidden /> Our trainers
+              <Users className="h-5 w-5" aria-hidden /> Our trainers
             </h2>
             <ul className="grid gap-3 sm:grid-cols-3">
               {trainers.map((t) => (
@@ -125,13 +136,13 @@ export default async function LandingPage() {
       )}
 
       {(hours.length > 0 || s.address || s.phone) && (
-        <section className="px-6 py-8" aria-labelledby="visit-heading">
+        <section className="px-4 py-8" aria-labelledby="visit-heading">
           <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-2">
             <h2 id="visit-heading" className="sr-only">Visit us</h2>
             {hours.length > 0 && (
               <div className="card p-5">
                 <h3 className="mb-3 flex items-center gap-2 font-semibold text-foreground">
-                  <Clock className="h-5 w-5 text-accent" aria-hidden /> Timings
+                  <Clock className="h-5 w-5" aria-hidden /> Timings
                 </h3>
                 <ul className="space-y-1 text-muted">
                   {hours.map((h) => (
@@ -143,7 +154,7 @@ export default async function LandingPage() {
             {(s.address || s.phone) && (
               <div className="card p-5">
                 <h3 className="mb-3 flex items-center gap-2 font-semibold text-foreground">
-                  <MapPin className="h-5 w-5 text-accent" aria-hidden /> Find us
+                  <MapPin className="h-5 w-5" aria-hidden /> Find us
                 </h3>
                 {s.address && <p className="text-muted">{s.address}</p>}
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -164,7 +175,7 @@ export default async function LandingPage() {
         </section>
       )}
 
-      <footer className="mt-8 border-t border-border px-6 py-8 text-sm text-muted">
+      <footer className="mt-8 border-t border-border px-4 py-8 text-sm text-muted">
         <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:flex-row sm:justify-between">
           <p>
             © {new Date().getFullYear()} {name}
@@ -173,6 +184,9 @@ export default async function LandingPage() {
           <p className="flex gap-4">
             <Link href="/login" className="hover:text-foreground">
               Member login
+            </Link>
+            <Link href="/privacy" className="hover:text-foreground">
+              Privacy
             </Link>
             {process.env.NEXT_PUBLIC_SUPPORT_EMAIL && (
               <a href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`} className="hover:text-foreground">

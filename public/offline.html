@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#FFFFFF" />
+    <title>You're offline</title>
+    <!-- Served by the service worker when there is no network. Plain HTML on purpose:
+         no app code runs, so nothing can pretend a check-in worked. -->
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 24px 16px; text-align: center; background: #ffffff; color: #0e0e0e;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; /* the app font is not cached offline */
+      }
+      img { width: 80px; height: 80px; border-radius: 16px; margin-bottom: 32px; }
+      h1 { font-size: 1.5rem; margin: 0 0 12px; }
+      p { color: #5e5e58; line-height: 1.6; max-width: 20rem; margin: 0; }
+      .card { margin-top: 32px; padding: 16px; background: #f3f3ef; border: 1px solid #e2e2dc; border-radius: 12px; max-width: 20rem; width: 100%; }
+      .card p { font-size: 0.875rem; }
+      button {
+        margin-top: 24px; min-height: 48px; padding: 0 24px; border: 0; border-radius: 12px;
+        background: #c6f432; color: #0e0e0e; font-weight: 600; font-size: 1rem; cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <img src="/icons/icon-192.png" alt="" />
+    <h1>You're offline</h1>
+    <p>Your check-in could not be recorded. Please ask the front desk staff for an assisted check-in.</p>
+    <div class="card">
+      <p>Your membership, visits and renewal will be available again as soon as you're back online.</p>
+    </div>
+    <button type="button" onclick="location.reload()">Try again</button>
+  </body>
+</html>

@@ -10,7 +10,7 @@
 import { z } from "zod";
 import { createServiceClient } from "./supabase/server";
 import { verifyQrToken } from "./qr";
-import { formatDisplayDate, formatDisplayTime, kolkataMidnightUtc, toKolkataDateString, todayKolkata } from "@/utils/dates";
+import { formatDisplayDate, formatDisplayTime, kolkataDateTimeUtc, kolkataMidnightUtc, toKolkataDateString, todayKolkata } from "@/utils/dates";
 import type { Attendance, CheckInRpcErrorCode, CheckInRpcResult } from "./supabase/database.types";
 
 export type CheckInErrorCode = CheckInRpcErrorCode | "QR_INVALID" | "INVALID_STATE";
@@ -203,4 +203,50 @@ export async function listCheckinsToday(): Promise<(Attendance & { memberName: s
     .in("id", [...new Set(data.map((a) => a.member_id))]);
   if (mError) throw new Error("ATTENDANCE_LOAD_FAILED");
   return data.map((a) => ({ ...a, memberName: members.find((m) => m.id === a.member_id)?.name ?? "Member" }));
+}
+
+export const backfillSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the date of the visit"),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose the time of the visit"),
+  reason: z
+    .string({ required_error: "Enter why this visit is being added" })
+    .trim()
+    .min(3, "Enter why this visit is being added")
+    .max(200, "Keep the reason under 200 characters"),
+});
+
+const BACKFILL_ERRORS: Record<string, string> = {
+  FORBIDDEN: "Please log in again.",
+  VALIDATION: "The visit must be in the last 30 days and not in the future.",
+  NOT_FOUND: "This member no longer exists.",
+  DUPLICATE_CHECKIN: "There is already a visit within a few hours of this time.",
+};
+
+/**
+ * Staff add a visit missed while the app was down (C3, DEPLOYMENT.md §8).
+ * Date and time are Asia/Kolkata wall-clock. Recorded as Assisted with the
+ * reason, audited, and it resolves an open Red List case opened on or before
+ * that day (backfill_attendance(), migration 012).
+ */
+export async function backfillAttendance(memberId: string, input: unknown, staffId: string): Promise<{ ok: true; caseResolved: boolean } | { ok: false; error: { code: string; message: string; fields?: Record<string, string> } }> {
+  const parsed = backfillSchema.safeParse(input);
+  if (!parsed.success) {
+    const fields: Record<string, string> = {};
+    for (const issue of parsed.error.issues) fields[String(issue.path[0])] ??= issue.message;
+    return { ok: false, error: { code: "VALIDATION", message: parsed.error.issues[0].message, fields } };
+  }
+  const at = kolkataDateTimeUtc(parsed.data.date, parsed.data.time);
+  if (at.getTime() > Date.now()) {
+    const message = "The visit can't be in the future.";
+    return { ok: false, error: { code: "VALIDATION", message, fields: { time: message } } };
+  }
+  const { data, error } = await createServiceClient().rpc("backfill_attendance", {
+    p_member_id: memberId,
+    p_at: at.toISOString(),
+    p_reason: parsed.data.reason,
+    p_staff_id: staffId,
+  });
+  if (error || !data) return { ok: false, error: { code: "INVALID_STATE", message: "We couldn't add this visit. Please try again." } };
+  if (!data.ok) return { ok: false, error: { code: data.code, message: BACKFILL_ERRORS[data.code] } };
+  return { ok: true, caseResolved: data.case_resolved };
 }

@@ -23,10 +23,10 @@ export default async function OwnerAddonsPage() {
   const isOwner = staff?.role === "Owner";
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl space-y-6">
+    <div className="mx-auto w-full px-4 pb-8 pt-4 md:px-6 md:pt-6 max-w-3xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-foreground">Add-ons</h1>
-        <Link href="/owner/renewals" className="text-sm font-medium text-accent min-h-[40px] inline-flex items-center">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Add-ons</h1>
+        <Link href="/owner/renewals" className="inline-flex min-h-[40px] items-center text-sm font-medium text-foreground underline underline-offset-4">
           Payments waiting to be verified →
         </Link>
       </div>

@@ -1,33 +1,36 @@
 import type { Metadata, Viewport } from "next";
+import { Archivo } from "next/font/google";
 import { Toaster } from "sonner";
+import { getSettings } from "@/services/settings";
 import "./globals.css";
 
-const GYM_NAME = process.env.NEXT_PUBLIC_GYM_NAME ?? "Gym Retention PWA";
+// One family for the whole app (UI.md §3.2): the width axis gives the condensed display figures;
+// latin-ext carries the ₹ sign.
+const archivo = Archivo({ subsets: ["latin", "latin-ext"], axes: ["wdth"], display: "swap", variable: "--font-archivo" });
 
-export const metadata: Metadata = {
-  title: {
-    default: GYM_NAME,
-    template: `%s — ${GYM_NAME}`,
-  },
-  description:
-    "Track your attendance, renew your membership and achieve your weekly fitness goal.",
-  applicationName: GYM_NAME,
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: GYM_NAME,
-  },
-  formatDetection: {
-    telephone: false,
-  },
-};
+// Tab titles carry the gym's own name from Settings, never a product placeholder.
+export async function generateMetadata(): Promise<Metadata> {
+  let gymName = process.env.NEXT_PUBLIC_GYM_NAME || "Gym";
+  try {
+    gymName = (await getSettings()).gym_name || gymName;
+  } catch {
+    // Settings unreachable: keep the fallback; the page's own error state explains the problem.
+  }
+  return {
+    title: { default: gymName, template: `%s — ${gymName}` },
+    description: "Track your attendance, renew your membership and achieve your weekly fitness goal.",
+    applicationName: gymName,
+    appleWebApp: { capable: true, statusBarStyle: "default", title: gymName },
+    formatDetection: { telephone: false },
+    icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
+    other: { "mobile-web-app-capable": "yes" },
+  };
+}
 
 export const viewport: Viewport = {
-  themeColor: "#0B0F0C",
+  themeColor: "#FFFFFF",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({
@@ -36,13 +39,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <head>
-        <link rel="manifest" href="/manifest.json" />
-      </head>
+    <html lang="en" className={archivo.variable}>
       <body className="min-h-screen bg-background">
         {children}
-        <Toaster theme="dark" position="top-center" richColors />
+        <Toaster theme="light" position="top-center" richColors toastOptions={{ className: "font-sans" }} />
       </body>
     </html>
   );

@@ -100,6 +100,11 @@ export function addDaysToDate(dateStr: string, days: number): string {
   return format(addDays(parseISO(dateStr), days), "yyyy-MM-dd");
 }
 
+/** The UTC instant of a wall-clock time ("HH:mm") on a date in Asia/Kolkata. */
+export function kolkataDateTimeUtc(dateStr: string, time: string): Date {
+  return fromZonedTime(`${dateStr}T${time}:00`, TIMEZONE);
+}
+
 /** The UTC instant of 00:00 in Asia/Kolkata on a date — for timestamptz query bounds. */
 export function kolkataMidnightUtc(dateStr: string): Date {
   return fromZonedTime(`${dateStr}T00:00:00`, TIMEZONE);
@@ -157,3 +162,9 @@ export function isExpiredKolkata(expiryDateStr: string): boolean {
 }
 
 export { isAfter, isBefore, isEqual, addDays, differenceInCalendarDays, formatISO };
+
+/** "Good morning / afternoon / evening" by the hour in Asia/Kolkata. */
+export function greetingKolkata(now: Date = new Date()): string {
+  const hour = Number(formatInTimeZone(now, TIMEZONE, "H"));
+  return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+}

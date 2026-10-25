@@ -64,7 +64,7 @@ export async function updateWeeklyGoalDefault(input: unknown, staffId: string): 
 export type GymSettings = Pick<
   Settings,
   | "gym_name" | "tagline" | "address" | "maps_url" | "phone" | "opening_hours" | "upi_id" | "upi_name"
-  | "no_show_threshold_days" | "renewal_windows" | "weekly_goal_default"
+  | "no_show_threshold_days" | "renewal_windows" | "weekly_goal_default" | "freeze_max_days_per_year" | "gstin"
 >;
 
 const DEFAULTS: GymSettings = {
@@ -79,13 +79,15 @@ const DEFAULTS: GymSettings = {
   no_show_threshold_days: DEFAULT_NO_SHOW_THRESHOLD_DAYS,
   renewal_windows: [...RENEWAL_WINDOWS],
   weekly_goal_default: DEFAULT_WEEKLY_TARGET,
+  freeze_max_days_per_year: 30,
+  gstin: null,
 };
 
 /** The single settings row, with defaults when it hasn't been created yet. Throws on a database error. */
 export async function getSettings(): Promise<GymSettings> {
   const { data, error } = await createServiceClient()
     .from("settings")
-    .select("gym_name, tagline, address, maps_url, phone, opening_hours, upi_id, upi_name, no_show_threshold_days, renewal_windows, weekly_goal_default")
+    .select("gym_name, tagline, address, maps_url, phone, opening_hours, upi_id, upi_name, no_show_threshold_days, renewal_windows, weekly_goal_default, freeze_max_days_per_year, gstin")
     .limit(1)
     .maybeSingle();
   if (error) throw new Error("SETTINGS_LOAD_FAILED");
@@ -119,6 +121,13 @@ export const gymProfileSchema = z.object({
     .transform((v) => v || null)
     .refine((v) => v === null || /^[A-Za-z0-9._-]{2,256}@[A-Za-z]{2,64}$/.test(v), "Enter a UPI ID like gymname@okicici"),
   upiName: optionalText(60, "Keep the payee name under 60 characters"),
+  // Only for GST-registered gyms; receipts then show the tax included (C8).
+  gstin: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? v.toUpperCase() : null))
+    .refine((v) => v === null || /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v), "Enter the 15-character GSTIN, e.g. 29ABCDE1234F1Z5"),
 });
 
 export const rulesSchema = z.object({
@@ -135,6 +144,11 @@ export const rulesSchema = z.object({
     .refine((list) => list.includes(0), "Include 0 (the expiry day)")
     .refine((list) => list.some((n) => n > 0), "Include at least one day before expiry")
     .transform((list) => [...new Set(list)].sort((a, b) => b - a)),
+  freezeMaxDaysPerYear: z.coerce
+    .number({ invalid_type_error: "Enter 0 to 365 days" })
+    .int("Enter a whole number of days")
+    .min(0, "Enter 0 to 365 days")
+    .max(365, "Enter 0 to 365 days"),
 });
 
 /** Update (or create) the single settings row and audit it. */
@@ -171,6 +185,7 @@ export async function updateGymProfile(input: unknown, staffId: string): Promise
       opening_hours: v.openingHours,
       upi_id: v.upiId,
       upi_name: v.upiName,
+      gstin: v.gstin,
     },
     staffId,
     `Gym profile updated: ${v.gymName}${v.upiId ? `, UPI ${v.upiId}` : ", no UPI ID"}.`
@@ -181,10 +196,10 @@ export async function updateGymProfile(input: unknown, staffId: string): Promise
 export async function updateRules(input: unknown, staffId: string): Promise<ActionResult<void>> {
   const parsed = rulesSchema.safeParse(input);
   if (!parsed.success) return validationError(parsed.error);
-  const { noShowThresholdDays, renewalWindows } = parsed.data;
+  const { noShowThresholdDays, renewalWindows, freezeMaxDaysPerYear } = parsed.data;
   return saveSettings(
-    { no_show_threshold_days: noShowThresholdDays, renewal_windows: renewalWindows },
+    { no_show_threshold_days: noShowThresholdDays, renewal_windows: renewalWindows, freeze_max_days_per_year: freezeMaxDaysPerYear },
     staffId,
-    `Rules updated: Red List after ${noShowThresholdDays} days absent; renewal windows ${renewalWindows.join(", ")}.`
+    `Rules updated: Red List after ${noShowThresholdDays} days absent; renewal windows ${renewalWindows.join(", ")}; up to ${freezeMaxDaysPerYear} paused days added per year.`
   );
 }

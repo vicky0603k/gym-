@@ -114,9 +114,4 @@ describe("cancelPayment", () => {
   });
 });
 
-describe("live database (pending)", () => {
-  it.todo("two members buying the last item at once: exactly one order succeeds");
-  it.todo("rejecting or cancelling an unpaid product order returns its stock");
-  it.todo("verifying a PT payment makes the order Active; +1 stops at sessions_total");
-  it.todo("stock adjustments write an audit row and never go below 0");
-});
+// Database rules (last item, stock return, PT cap, stock audit): tests/db/members-addons.test.ts

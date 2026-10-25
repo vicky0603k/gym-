@@ -1,7 +1,8 @@
 import type { Config } from "tailwindcss";
 
+// "Iron & Volt" light theme — tokens from DESIGN.md §2 / UI.md §3.1 (ADR-012).
+// Volt (accent) is a fill only: never text, icons or thin lines on a light surface.
 const config: Config = {
-  darkMode: "class",
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -10,27 +11,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Dark gym theme
-        background: "#0B0F0C",
-        surface: "#161C18",
-        "surface-2": "#1E2620",
-        border: "#2A3530",
-        // Accent — lime/volt green
+        background: "#FFFFFF",
+        surface: "#F3F3EF",
+        "surface-2": "#E8E8E2",
+        border: "#E2E2DC",
+        "border-strong": "#7A7A72",
+        foreground: "#0E0E0E",
+        muted: "#5E5E58",
         accent: {
-          DEFAULT: "#B5FF47",
-          foreground: "#0B0F0C",
-          muted: "#8CC93A",
+          DEFAULT: "#C6F432",
+          foreground: "#0E0E0E",
+          muted: "#B4E11F",
         },
-        // Semantic
-        danger: "#FF4444",
-        warning: "#F59E0B",
-        success: "#B5FF47",
-        // Text
-        foreground: "#F0F4F1",
-        muted: "#8A9E92",
+        success: "#2E7D0F",
+        warning: "#B45309",
+        danger: "#C62828",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["var(--font-archivo)", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "0.75rem",

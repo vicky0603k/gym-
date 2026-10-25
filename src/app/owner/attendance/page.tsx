@@ -11,8 +11,8 @@ export default async function TodayCheckinsPage() {
   const checkins = await listCheckinsToday();
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl">
-      <h1 className="text-2xl font-bold text-foreground">Today&apos;s check-ins</h1>
+    <div className="mx-auto w-full px-4 pb-8 pt-4 md:px-6 md:pt-6 max-w-3xl">
+      <h1 className="text-2xl font-bold tracking-tight text-foreground">Today&apos;s check-ins</h1>
       <p className="text-sm text-muted mb-4">
         {formatDisplayDate(todayKolkata())} · {checkins.length} so far
       </p>

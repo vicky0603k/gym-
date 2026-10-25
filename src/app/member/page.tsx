@@ -1,85 +1,114 @@
 import Link from "next/link";
-import { CalendarClock, CreditCard, IdCard, ScanLine } from "lucide-react";
+import { ChevronRight, CreditCard, IdCard, ScanLine } from "lucide-react";
 import { requireMember } from "@/services/auth";
 import { getMemberHome } from "@/services/members";
 import { getWeeklyGoalState } from "@/services/streak";
-import { daysUntilKolkata, formatDisplayDate } from "@/utils/dates";
+import { getGymName } from "@/services/renewals";
+import { listAddons } from "@/services/addons";
+import { daysUntilKolkata, greetingKolkata } from "@/utils/dates";
+import { formatRupees } from "@/utils/money";
 import { EmptyState } from "@/components/states";
-import { StatusBadge } from "@/components/status-badge";
+import { Avatar } from "@/components/ui/bits";
+import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Page } from "@/components/ui/page";
 import { WeeklyGoalCard } from "./weekly-goal-card";
+import { MembershipCard } from "./membership-card";
+
+export const dynamic = "force-dynamic";
 
 /**
- * Member home — real current plan, exact expiry date and the weekly goal.
+ * Member home (mockup C): greeting, the black membership card, this week's visits,
+ * the one main action, and one real add-on from the gym's catalogue.
  * A renew prompt appears from 7 days before expiry (member reminder stage, ADR-009).
  */
 export default async function MemberHomePage() {
   const { memberId } = await requireMember();
-  const [home, goal] = await Promise.all([getMemberHome(memberId), getWeeklyGoalState(memberId)]);
+  const [home, goal, gymName, addons] = await Promise.all([
+    getMemberHome(memberId),
+    getWeeklyGoalState(memberId),
+    getGymName(),
+    listAddons(),
+  ]);
   const membership = home?.membership ?? null;
+  const name = home?.name ?? "";
+
+  const header = (
+    <header className="mb-4 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm text-muted">{greetingKolkata()}</p>
+        <h1 className="truncate text-xl font-bold text-foreground">{name}</h1>
+      </div>
+      <Link href="/member/more" aria-label="Account and settings">
+        <Avatar name={name} tone="volt" />
+      </Link>
+    </header>
+  );
 
   if (!membership) {
     return (
-      <div className="px-6 py-6 max-w-md mx-auto">
+      <Page>
+        {header}
         <EmptyState
           icon={<IdCard className="h-10 w-10" />}
           title="No membership on file"
-          message="Please visit the front desk to start or renew your membership."
+          message="Visit the front desk to start your membership — they can take cash or UPI."
         />
-      </div>
+      </Page>
     );
   }
 
   const daysLeft = daysUntilKolkata(membership.expiry_date);
   const expired = daysLeft < 0;
-  const status = membership.status === "Active" && expired ? "Expired" : membership.status;
+  const featured = addons.find((a) => a.available);
 
   return (
-    <div className="px-6 py-6 max-w-md mx-auto">
-      <p className="text-muted">Welcome back,</p>
-      <h1 className="text-2xl font-bold text-foreground mb-6">{home!.name}</h1>
-
-      <div className="card p-5">
-        <div className="flex justify-between items-start gap-3 mb-4">
-          <div>
-            <p className="text-sm text-muted">Current plan</p>
-            <p className="text-lg font-semibold text-foreground">{membership.planName}</p>
-          </div>
-          <StatusBadge status={status} />
-        </div>
-        <div className="border-t border-border pt-3 flex items-start gap-3">
-          <CalendarClock className="h-5 w-5 text-muted mt-0.5" aria-hidden />
-          <div>
-            <p className="text-sm text-muted">{expired ? "Expired on" : "Valid till"}</p>
-            <p className="text-foreground font-semibold text-lg">{formatDisplayDate(membership.expiry_date)}</p>
-            <p className={expired || daysLeft <= 7 ? "text-sm text-warning" : "text-sm text-muted"}>
-              {membership.status === "Frozen"
-                ? `Paused since ${formatDisplayDate(membership.freeze_start ?? membership.start_date)}`
-                : expired
-                  ? "Please renew at the front desk to keep checking in."
-                  : daysLeft === 0
-                    ? "Last day today"
-                    : `${daysLeft} ${daysLeft === 1 ? "day" : "days"} left`}
-            </p>
-          </div>
-        </div>
-      </div>
-      <p className="text-xs text-muted mt-3 mb-4">Started {formatDisplayDate(membership.start_date)}. Only you can see this.</p>
+    <Page>
+      {header}
+      <MembershipCard gymName={gymName} membership={membership} />
 
       {membership.status !== "Frozen" && daysLeft <= 7 && (
-        <Link href="/member/renew" className="card mb-4 flex items-center gap-3 border-warning/40 p-4 min-h-[64px]">
+        <Link href="/member/renew" className="mt-3 flex min-h-[64px] items-center gap-3 rounded-lg border-2 border-warning bg-background p-4">
           <CreditCard className="h-6 w-6 shrink-0 text-warning" aria-hidden />
           <span className="flex-1">
             <span className="block font-semibold text-foreground">{expired ? "Renew to keep training" : "Time to renew"}</span>
             <span className="block text-sm text-muted">See plans and the final amount to pay</span>
           </span>
+          <ChevronRight className="h-5 w-5 text-muted" aria-hidden />
         </Link>
       )}
 
-      <WeeklyGoalCard goal={goal} />
+      <div className="mt-3">
+        <WeeklyGoalCard goal={goal} />
+      </div>
 
-      <Link href="/member/check-in" className="btn-primary mt-6 flex w-full items-center justify-center gap-2">
-        <ScanLine className="h-5 w-5" aria-hidden /> Check in
-      </Link>
-    </div>
+      <ButtonLink href="/member/check-in" size="lg" block className="mt-3">
+        <ScanLine className="h-5 w-5" aria-hidden /> Scan to check in
+      </ButtonLink>
+
+      {featured && (
+        <Link href="/member/add-ons" className="mt-3 block">
+          <Card className="flex items-center justify-between gap-3 transition-colors hover:bg-surface-2" as="div">
+            <div className="min-w-0">
+              <p className="font-semibold text-foreground">{featured.title}</p>
+              <p className="text-sm text-muted">
+                {featured.type === "PT"
+                  ? `${featured.sessions} sessions · ${featured.validity_days} days`
+                  : featured.type === "Diet"
+                    ? `${featured.validity_days}-day plan`
+                    : "Collect at the front desk"}
+              </p>
+              {featured.trainerName && (
+                <Badge tone="dark" size="sm" className="mt-2">
+                  With {featured.trainerName}
+                </Badge>
+              )}
+            </div>
+            <p className="num-display shrink-0 text-2xl text-foreground">{formatRupees(featured.price)}</p>
+          </Card>
+        </Link>
+      )}
+    </Page>
   );
 }

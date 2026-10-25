@@ -7,33 +7,38 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+// Chrome fires this once per page load, usually before the member reaches the
+// check-in success screen, so it is captured as soon as this module loads.
+let deferred: BeforeInstallPromptEvent | null = null;
+const listeners = new Set<() => void>();
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferred = e as BeforeInstallPromptEvent;
+    listeners.forEach((l) => l());
+  });
+}
+
 /**
- * Captures the `beforeinstallprompt` event so we can show a custom
- * install button. The prompt is only shown once, after the first
- * successful check-in (per DESIGN.md §7).
+ * Custom install button state. The prompt is only shown once, after the
+ * first successful check-in (per DESIGN.md §7).
  */
 export function useInstallPrompt() {
-  const [promptEvent, setPromptEvent] =
-    useState<BeforeInstallPromptEvent | null>(null);
+  const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(deferred);
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
-    // Detect if already installed (standalone mode)
     if (window.matchMedia("(display-mode: standalone)").matches) {
       setIsInstalled(true);
       return;
     }
-
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setPromptEvent(e as BeforeInstallPromptEvent);
-    };
-
-    window.addEventListener("beforeinstallprompt", handler);
-    window.addEventListener("appinstalled", () => setIsInstalled(true));
-
+    const sync = () => setPromptEvent(deferred);
+    const installed = () => setIsInstalled(true);
+    listeners.add(sync);
+    window.addEventListener("appinstalled", installed);
     return () => {
-      window.removeEventListener("beforeinstallprompt", handler);
+      listeners.delete(sync);
+      window.removeEventListener("appinstalled", installed);
     };
   }, []);
 
@@ -41,9 +46,8 @@ export function useInstallPrompt() {
     if (!promptEvent) return;
     await promptEvent.prompt();
     const { outcome } = await promptEvent.userChoice;
-    if (outcome === "accepted") {
-      setIsInstalled(true);
-    }
+    if (outcome === "accepted") setIsInstalled(true);
+    deferred = null; // an event can be prompted only once
     setPromptEvent(null);
   };
 

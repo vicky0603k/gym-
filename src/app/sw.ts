@@ -24,13 +24,16 @@ const serwist = new Serwist({
   runtimeCaching: [
     // The gate QR token must never come from a cache: a stale token shown as valid breaks check-in.
     { matcher: ({ url }) => url.pathname === "/api/qr-token", handler: new NetworkOnly() },
+    // Pages are never shown from the cache: an old copy would show a stale expiry or visit count.
+    // Offline, every page opens the offline screen instead (ADR-011) via `fallbacks` below.
+    { matcher: ({ request }) => request.mode === "navigate", handler: new NetworkOnly() },
     ...defaultCache,
   ],
-  // Serve /offline when the network is unavailable
+  // Serve the static offline page when the network is unavailable (plain HTML: no app code runs)
   fallbacks: {
     entries: [
       {
-        url: "/offline",
+        url: "/offline.html",
         matcher({ request }) {
           return request.destination === "document";
         },

@@ -8,6 +8,7 @@
  */
 import { createServiceClient } from "./supabase/server";
 import { getRedList, type RedListRow } from "./red-list";
+import type { DataQualityRow } from "./supabase/database.types";
 
 export interface DashboardKPIs {
   activeMembers: number;
@@ -53,4 +54,28 @@ export async function getFollowUpsDue(limit = 5): Promise<{ rows: RedListRow[]; 
   const { rows } = await getRedList();
   const due = rows.filter((r) => r.followUpDue);
   return { rows: due.slice(0, limit), total: due.length };
+}
+
+export interface DataQualityIssue {
+  key: keyof DataQualityRow;
+  count: number;
+  label: string;
+  href: string;
+}
+
+const ISSUE_TEXT: Record<keyof DataQualityRow, { label: string; href: string }> = {
+  paid_without_reference: { label: "paid payments without a reference", href: "/owner/renewals" },
+  active_past_expiry: { label: "memberships past expiry still marked active (fixed by the next daily run)", href: "/owner/members?status=Active" },
+  members_without_membership: { label: "members with no membership", href: "/owner/members" },
+  payments_pending_over_3_days: { label: "payments waiting more than 3 days for verification", href: "/owner/renewals" },
+  stock_below_zero: { label: "add-ons with stock below zero", href: "/owner/add-ons" },
+};
+
+/** Data-quality checks for the owner dashboard (C7). Only non-zero issues are returned. */
+export async function getDataQualityIssues(): Promise<DataQualityIssue[]> {
+  const { data, error } = await createServiceClient().rpc("data_quality_issues", {});
+  if (error || !data) throw new Error("DATA_QUALITY_LOAD_FAILED");
+  return (Object.keys(ISSUE_TEXT) as (keyof DataQualityRow)[])
+    .filter((key) => Number(data[key]) > 0)
+    .map((key) => ({ key, count: Number(data[key]), ...ISSUE_TEXT[key] }));
 }

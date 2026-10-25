@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
@@ -13,11 +13,9 @@
     overflow-x: hidden;
   }
 
-  /* Minimum tap targets on mobile */
-  button,
-  a,
-  [role="button"] {
-    @apply min-h-[48px];
+  /* Keyboard focus: a black ring is visible on every surface (volt is not — UI.md §3.1). */
+  :focus-visible {
+    @apply outline-none ring-2 ring-foreground ring-offset-2 ring-offset-background;
   }
 
   /* Better touch scrolling */
@@ -32,39 +30,47 @@
     @apply bg-surface rounded-lg border border-border;
   }
 
-  /* Primary button */
+  /* 48px targets live on controls, not on every inline text link (UI.md audit #7). */
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost,
+  .btn-danger,
+  .btn-dark {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3 min-h-[48px] font-semibold
+           active:scale-[0.98] transition-[transform,background-color,border-color] duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Primary: volt fill, black text */
   .btn-primary {
-    @apply bg-accent text-accent-foreground font-semibold rounded-lg px-6 py-3 min-h-[48px]
-           hover:bg-accent-muted active:scale-[0.98] transition-all duration-150
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-accent text-accent-foreground hover:bg-accent-muted;
   }
 
-  /* Secondary button */
+  /* Black: strong secondary action */
+  .btn-dark {
+    @apply bg-foreground text-background hover:bg-foreground/85;
+  }
+
+  /* Outlined secondary */
   .btn-secondary {
-    @apply bg-surface-2 text-foreground font-semibold rounded-lg px-6 py-3 min-h-[48px]
-           border border-border hover:bg-border active:scale-[0.98] transition-all duration-150
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-background text-foreground border border-border-strong hover:bg-surface;
   }
 
-  /* Ghost button */
+  /* Ghost */
   .btn-ghost {
-    @apply text-foreground font-medium rounded-lg px-4 py-3 min-h-[48px]
-           hover:bg-surface-2 active:scale-[0.98] transition-all duration-150
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply px-4 font-medium text-foreground hover:bg-surface-2;
   }
 
-  /* Danger button */
+  /* Danger: outlined red, never a red fill for routine actions */
   .btn-danger {
-    @apply bg-danger/10 text-danger font-semibold rounded-lg px-6 py-3 min-h-[48px]
-           border border-danger/30 hover:bg-danger/20 active:scale-[0.98] transition-all duration-150
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-background text-danger border border-danger hover:bg-danger/5;
   }
 
   /* Input field */
   .input {
-    @apply w-full bg-surface-2 border border-border rounded-lg px-4 py-3 text-foreground
-           text-base placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50
-           focus:border-accent disabled:opacity-50;
+    @apply w-full bg-background border border-border-strong rounded-lg px-4 py-3 text-foreground
+           text-base placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-foreground
+           focus:border-foreground disabled:opacity-50;
   }
 
   /* Label */
@@ -72,9 +78,15 @@
     @apply block text-sm font-medium text-muted mb-1;
   }
 
+  /* Condensed display figures: expiry date, visits, prices (UI.md §3.2) */
+  .num-display {
+    @apply font-extrabold tabular-nums leading-none tracking-tight;
+    font-stretch: 72%;
+  }
+
   /* Stat card KPI number */
   .kpi-number {
-    @apply text-3xl font-bold text-foreground tabular-nums;
+    @apply num-display text-4xl text-foreground;
   }
 }
 
@@ -85,14 +97,32 @@
   }
 }
 
-/* Weekly goal ring fills from empty on load (member home) */
-@keyframes goal-fill {
+/* Weekly goal plates load one after another on member home */
+@keyframes plate-in {
   from {
-    stroke-dashoffset: var(--goal-c);
+    transform: scaleY(0.2);
+    opacity: 0;
   }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .goal-ring {
-    animation: goal-fill 700ms ease-out;
+  .plate-in {
+    animation: plate-in 260ms ease-out both;
+  }
+}
+
+/* Counter-receipt tear edge along the bottom of the receipt card (UI.md §1). Mask colours are not paint. */
+.receipt-edge {
+  --tooth: 12px;
+  -webkit-mask:
+    radial-gradient(circle at 50% 100%, transparent 5px, #000 5.5px) bottom / var(--tooth) var(--tooth) repeat-x,
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth) + 1px) no-repeat;
+  mask:
+    radial-gradient(circle at 50% 100%, transparent 5px, #000 5.5px) bottom / var(--tooth) var(--tooth) repeat-x,
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth) + 1px) no-repeat;
+}
+@media print {
+  .receipt-edge {
+    -webkit-mask: none;
+    mask: none;
   }
 }

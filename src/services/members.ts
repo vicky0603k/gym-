@@ -308,7 +308,7 @@ export async function pauseMember(memberId: string, input: unknown, staffId: str
   return pauseMembership({ membershipId: membership.id, memberId, reason: parsed.data.reason, staffId });
 }
 
-export async function resumeMember(memberId: string, staffId: string): Promise<ActionResult<void>> {
+export async function resumeMember(memberId: string, staffId: string): Promise<ActionResult<{ daysAdded: number; newExpiry: string }>> {
   const { data: membership, error } = await createServiceClient()
     .from("memberships")
     .select("id")
@@ -321,6 +321,96 @@ export async function resumeMember(memberId: string, staffId: string): Promise<A
   if (!membership) return { ok: false, error: { code: "INVALID_STATE", message: "This member is not paused." } };
 
   return resumeMembership({ membershipId: membership.id, memberId, staffId });
+}
+
+export const resetPinSchema = z.object({ pin: z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN") });
+
+/** Staff set a new PIN at the desk (SECURITY.md §1). Clears any login lockout; audited. */
+export async function resetMemberPin(memberId: string, input: unknown, staffId: string): Promise<ActionResult<void>> {
+  const parsed = resetPinSchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("members")
+    .update({ pin_hash: hashPin(parsed.data.pin), pin_failed_attempts: 0, pin_locked_until: null })
+    .eq("id", memberId)
+    .select("name");
+  if (error) return { ok: false, error: { code: "INVALID_STATE", message: "We couldn't reset the PIN. Please try again." } };
+  if (!data?.length) return { ok: false, error: { code: "NOT_FOUND", message: "This member no longer exists." } };
+
+  await supabase.from("audit_logs").insert({
+    actor_type: "Staff",
+    actor_id: staffId,
+    action: "member.pin_reset",
+    record_type: "member",
+    record_id: memberId,
+    summary: `Login PIN reset for ${data[0].name}; login lockout cleared.`,
+  });
+  return { ok: true, data: undefined };
+}
+
+export const correctExpirySchema = z.object({
+  expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the correct expiry date"),
+  reason: z.string({ required_error: "Enter a reason for the correction" }).trim().min(3, "Enter a reason for the correction"),
+});
+
+/**
+ * Owner fixes the expiry of the member's current membership (TESTING.md row 9).
+ * Reason mandatory, audited. A date moved back into the future re-opens an
+ * Expired membership, the same way a verified renewal does.
+ */
+export async function correctExpiry(memberId: string, input: unknown, staffId: string): Promise<ActionResult<void>> {
+  const parsed = correctExpirySchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+  const { expiryDate, reason } = parsed.data;
+
+  const supabase = createServiceClient();
+  const { data: membership, error } = await supabase
+    .from("memberships")
+    .select("id, start_date, expiry_date, status")
+    .eq("member_id", memberId)
+    .in("status", ["Active", "Frozen", "Expired"])
+    .order("expiry_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return SAVE_FAILED;
+  if (!membership) return { ok: false, error: { code: "INVALID_STATE", message: "This member has no membership to correct." } };
+  if (expiryDate <= membership.start_date) {
+    const message = "The expiry must be after the start date.";
+    return { ok: false, error: { code: "VALIDATION", message, fields: { expiryDate: message } } };
+  }
+  if (expiryDate === membership.expiry_date) {
+    const message = "This is already the expiry date.";
+    return { ok: false, error: { code: "VALIDATION", message, fields: { expiryDate: message } } };
+  }
+
+  const reopen = membership.status === "Expired" && expiryDate >= todayKolkata();
+  const { data: updated, error: updateError } = await supabase
+    .from("memberships")
+    .update(reopen ? { expiry_date: expiryDate, status: "Active" } : { expiry_date: expiryDate })
+    .eq("id", membership.id)
+    .eq("expiry_date", membership.expiry_date) // a concurrent change makes this a no-op
+    .select("id");
+  if (updateError || !updated?.length) return SAVE_FAILED;
+
+  if (reopen) {
+    const { error: memberError } = await supabase.from("members").update({ status: "Active" }).eq("id", memberId).eq("status", "Expired");
+    if (memberError) {
+      await supabase.from("memberships").update({ expiry_date: membership.expiry_date, status: "Expired" }).eq("id", membership.id);
+      return SAVE_FAILED;
+    }
+  }
+
+  await supabase.from("audit_logs").insert({
+    actor_type: "Staff",
+    actor_id: staffId,
+    action: "membership.expiry_corrected",
+    record_type: "membership",
+    record_id: membership.id,
+    summary: `Expiry corrected from ${membership.expiry_date} to ${expiryDate}. Reason: ${reason}`,
+  });
+  return { ok: true, data: undefined };
 }
 
 export interface MemberHome {
@@ -393,5 +483,48 @@ export async function updateMemberPreference(memberId: string, input: unknown): 
     record_id: memberId,
     summary: `Member turned ${value ? "on" : "off"} ${PREF_LABEL[key]}.`,
   });
+  return { ok: true, data: undefined };
+}
+
+export const memberStatusSchema = z.object({
+  action: z.enum(["Cancel", "Block", "Reactivate"], { errorMap: () => ({ message: "Choose what to do" }) }),
+  reason: z.string({ required_error: "Enter a reason" }).trim().min(3, "Enter a reason").max(300, "Keep the reason under 300 characters"),
+});
+
+const STATUS_ERRORS: Record<string, string> = {
+  FORBIDDEN: "Only the owner can change a member's status.",
+  VALIDATION: "Enter a reason.",
+  NOT_FOUND: "This member no longer exists.",
+  INVALID_STATE: "This member is already in that state.",
+};
+
+/**
+ * Owner marks a member Cancelled (left) or Blocked, or reactivates them (C2).
+ * Reason mandatory, audited; memberships, payments and visits stay untouched
+ * (set_member_status(), migration 012). Cancelled/Blocked members can't check in
+ * and never appear on the Red List.
+ */
+export async function setMemberStatus(memberId: string, input: unknown, staffId: string): Promise<ActionResult<{ status: MemberStatus }>> {
+  const parsed = memberStatusSchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+  const { data, error } = await createServiceClient().rpc("set_member_status", {
+    p_member_id: memberId,
+    p_action: parsed.data.action,
+    p_reason: parsed.data.reason,
+    p_staff_id: staffId,
+  });
+  if (error || !data) return SAVE_FAILED;
+  if (!data.ok) return { ok: false, error: { code: data.code, message: STATUS_ERRORS[data.code] } };
+  return { ok: true, data: { status: data.status } };
+}
+
+/** On the member's request: remove name, phone and PIN of a Cancelled member; history stays (SECURITY.md §6). */
+export async function anonymiseMember(memberId: string, staffId: string): Promise<ActionResult<void>> {
+  const { data, error } = await createServiceClient().rpc("anonymise_member", { p_member_id: memberId, p_staff_id: staffId });
+  if (error || !data) return SAVE_FAILED;
+  if (!data.ok) {
+    const message = data.code === "INVALID_STATE" ? "Only a cancelled member's details can be removed." : STATUS_ERRORS[data.code];
+    return { ok: false, error: { code: data.code, message } };
+  }
   return { ok: true, data: undefined };
 }

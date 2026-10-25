@@ -16,11 +16,11 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
   if (!plan) notFound();
 
   return (
-    <div className="p-4 md:p-6 max-w-xl">
+    <div className="mx-auto w-full px-4 pb-8 pt-4 md:px-6 md:pt-6 max-w-2xl">
       <Link href="/owner/plans" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground min-h-[48px]">
         <ArrowLeft className="h-4 w-4" aria-hidden /> Plans
       </Link>
-      <h1 className="text-2xl font-bold text-foreground mb-1">Edit {plan.name}</h1>
+      <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Edit {plan.name}</h1>
       <p className="text-sm text-muted mb-6">Changes apply to new members and renewals. Running memberships keep their dates.</p>
       <div className="card p-5">
         <PlanForm plan={plan} />

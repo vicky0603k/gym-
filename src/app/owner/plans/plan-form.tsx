@@ -102,7 +102,7 @@ export function PlanForm({ plan }: { plan?: Plan }) {
           type="checkbox"
           name="isActive"
           defaultChecked={plan?.is_active ?? true}
-          className="h-5 w-5 accent-[#B5FF47]"
+          className="h-5 w-5 accent-foreground"
         />
         <span>
           <span className="block text-foreground">Offered to new members</span>

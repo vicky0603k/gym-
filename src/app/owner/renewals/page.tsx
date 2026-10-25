@@ -8,6 +8,9 @@ import { formatDisplayDate, formatDisplayDateTime } from "@/utils/dates";
 import { formatRupees } from "@/utils/money";
 import { EmptyState } from "@/components/states";
 import { ReviewDialog } from "./review-dialog";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { Page, PageHeader } from "@/components/ui/page";
 
 export const metadata = { title: "Renewals" };
 // Live money data on every request; never prerendered at build time.
@@ -26,18 +29,18 @@ export default async function RenewalsPage() {
   const total = groups.reduce((n, g) => n + g.rows.length, 0);
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Renewals</h1>
+    <Page width="owner" className="space-y-6">
+      <PageHeader title="Renewals" description="Verify payments, then remind members whose plans run out soon." className="mb-0" />
 
       <section aria-labelledby="queue-heading">
-        <h2 id="queue-heading" className="mb-2 flex items-center gap-2 text-lg font-semibold text-foreground">
-          <BadgeCheck className="h-5 w-5 text-accent" aria-hidden /> Pending verification
-          <span className="text-sm font-normal text-muted">({queue.length})</span>
+        <h2 id="queue-heading" className="mb-2 flex items-center gap-2 font-semibold text-foreground">
+          <BadgeCheck className="h-5 w-5" aria-hidden /> Pending verification
+          <Badge tone={queue.length ? "warning" : "muted"}>{queue.length}</Badge>
         </h2>
         {queue.length === 0 ? (
-          <p className="card p-4 text-sm text-muted">No payments waiting. Renewal and add-on payments appear here as soon as a member pays.</p>
+          <p className="rounded-lg bg-surface p-4 text-sm text-muted">No payments waiting. Renewal and add-on payments appear here as soon as a member pays.</p>
         ) : (
-          <ul className="card divide-y divide-border">
+          <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-background">
             {queue.map((p) => (
               <li key={p.id} className="px-4 py-4">
                 <div className="flex items-start justify-between gap-3">
@@ -51,15 +54,19 @@ export default async function RenewalsPage() {
                       {p.quantity > 1 ? ` × ${p.quantity}` : ""} · {receiptNumber(p.id)} · {formatDisplayDateTime(p.createdAt)}
                     </p>
                     <p className={p.providerRef ? "text-sm text-foreground" : "text-sm text-warning"}>
-                      {p.providerRef ? `Member's UPI reference: ${p.providerRef}` : "Member hasn't sent a reference yet"}
+                      {p.method === "Cash"
+                        ? `Cash taken at the desk · ${p.providerRef}`
+                        : p.providerRef
+                          ? `UPI reference: ${p.providerRef}`
+                          : "Member hasn't sent a reference yet"}
                     </p>
                   </div>
-                  <p className="shrink-0 text-lg font-bold tabular-nums text-foreground">{formatRupees(p.amount)}</p>
+                  <p className="num-display shrink-0 text-3xl text-foreground">{formatRupees(p.amount)}</p>
                 </div>
                 {isOwner && (
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <ReviewDialog mode="verify" paymentId={p.id} memberName={p.memberName} planName={p.planName} amount={p.amount} claimedRef={p.providerRef} purpose={p.purpose} />
-                    <ReviewDialog mode="reject" paymentId={p.id} memberName={p.memberName} planName={p.planName} amount={p.amount} claimedRef={p.providerRef} purpose={p.purpose} />
+                    <ReviewDialog mode="verify" paymentId={p.id} memberName={p.memberName} planName={p.planName} amount={p.amount} claimedRef={p.providerRef} purpose={p.purpose} method={p.method} />
+                    <ReviewDialog mode="reject" paymentId={p.id} memberName={p.memberName} planName={p.planName} amount={p.amount} claimedRef={p.providerRef} purpose={p.purpose} method={p.method} />
                   </div>
                 )}
               </li>
@@ -69,7 +76,7 @@ export default async function RenewalsPage() {
       </section>
 
       <section aria-labelledby="pipeline-heading" className="space-y-4">
-        <h2 id="pipeline-heading" className="text-lg font-semibold text-foreground">
+        <h2 id="pipeline-heading" className="font-semibold text-foreground">
           Renewals due
         </h2>
         {total === 0 ? (
@@ -80,14 +87,14 @@ export default async function RenewalsPage() {
           />
         ) : (
           groups.map((g) => (
-            <div key={g.key} className="card">
-              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div key={g.key} className="overflow-hidden rounded-lg border border-border bg-background">
+              <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3">
                 <div>
                   <h3 className="font-semibold text-foreground">{g.title}</h3>
                   {!g.memberReminder && <p className="text-xs text-muted">Heads-up only — members aren&apos;t messaged yet</p>}
                 </div>
                 <p className="text-right text-sm text-muted">
-                  {g.rows.length} · <span className="font-semibold text-foreground">{formatRupees(g.expected)}</span>
+                  {g.rows.length} · <span className="num-display text-xl text-foreground">{formatRupees(g.expected)}</span>
                   {g.pending > 0 && <span className="block text-xs text-warning">{g.pending} paying now</span>}
                 </p>
               </div>
@@ -111,7 +118,7 @@ export default async function RenewalsPage() {
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <a href={`tel:+91${r.member_phone}`} className="btn-secondary px-3" aria-label={`Call ${r.member_name}`}>
+                        <a href={`tel:+91${r.member_phone}`} className={buttonVariants({ variant: "outline", size: "sm" })} aria-label={`Call ${r.member_name}`}>
                           <Phone className="h-4 w-4" aria-hidden />
                         </a>
                         {g.memberReminder && !r.pending_payment_id && r.notify_renewal && (
@@ -122,7 +129,7 @@ export default async function RenewalsPage() {
                             )}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="btn-secondary inline-flex items-center gap-2 px-3 text-sm"
+                            className={buttonVariants({ variant: "dark", size: "sm" })}
                           >
                             <MessageCircle className="h-4 w-4" aria-hidden /> Remind
                           </a>
@@ -136,6 +143,6 @@ export default async function RenewalsPage() {
           ))
         )}
       </section>
-    </div>
+    </Page>
   );
 }

@@ -24,7 +24,7 @@ describe("GET /api/qr-token", () => {
 
   it.each(["Owner", "FrontDesk"] as const)("returns a valid token for %s", async (role) => {
     vi.mocked(getCurrentStaff).mockResolvedValue({
-      id: "s1", name: "Staff", role, email: "s@gym.in", created_at: "", updated_at: "",
+      id: "s1", name: "Staff", role, is_active: true, email: "s@gym.in", created_at: "", updated_at: "",
     });
 
     const res = await GET();

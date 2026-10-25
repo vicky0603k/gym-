@@ -19,7 +19,7 @@ The person. One row per gym member.
 | id | uuid PK | |
 | name | text | Full name |
 | phone | text UNIQUE | Login identity, 10-digit Indian mobile (store normalised, digits only) |
-| pin_hash | text | Hashed 4-digit PIN, never plain text |
+| pin_hash | text | `scrypt$<salt>$<hash>` with a per-member salt (migration 012 / C6). Older unsalted SHA-256 values still verify and are re-hashed on the member's next login |
 | status | enum | `Active, Paused, Expired, Cancelled, Blocked` |
 | assigned_trainer_id | uuid FK → trainers | Nullable |
 | weekly_target | int default 4 | Visits per week goal |
@@ -44,6 +44,7 @@ Owner and front-desk accounts, linked to Supabase Auth.
 | id | uuid PK | Same id as the Supabase Auth user |
 | name | text | |
 | role | enum | `Owner, FrontDesk` |
+| is_active | boolean default true | Migration 012. False = access removed: `is_staff()`/`is_owner()` return false and the Auth user is banned. Rows are never deleted (payments and visits point at them) |
 
 ### plans
 | Column | Type | Notes |
@@ -66,7 +67,7 @@ A member's subscription period. A member has many over time; at most one is Acti
 | start_date | date | |
 | expiry_date | date | The single most important date in the system — never null for an Active membership |
 | status | enum | `Pending, Active, Frozen, Expired, Cancelled` |
-| freeze_start, freeze_end | date | Nullable; set while Frozen |
+| freeze_start, freeze_end | date | Nullable; set while Frozen. `freeze_end` is the resume day (active again from that day) |
 | renewal_source | text | `Desk, App, Pilot import` etc. |
 
 ### attendance
@@ -116,7 +117,8 @@ Append-only contact history for a case.
 | member_id | uuid FK → members | |
 | purpose | enum | `Renewal, AddOn` |
 | ref_id | uuid | The renewal order or add-on order this pays for |
-| provider_ref | text | UPI reference / later Razorpay id; a Paid payment without a reference triggers a data-quality alert |
+| provider_ref | text | UPI reference (UTR) or desk cash receipt number `CASH-000001` (sequence `cash_receipt_seq`); a Paid payment without a reference triggers a data-quality alert |
+| method | text default 'UPI' | `UPI` or `Cash` (migration 012). Cash is only ever recorded by staff at the desk |
 | amount | int | ₹ actually paid |
 | status | enum | `Created, Pending, Paid, Failed, Refunded` |
 | verified_by | uuid FK → staff_users | MVP manual verification |
@@ -184,6 +186,22 @@ Single-row gym configuration.
 | weekly_goal_default | int default 4 | |
 | tagline, opening_hours, maps_url | text | Gym profile shown on the landing page (migration 010) |
 | upi_id, upi_name | text | Where members pay renewals and add-ons (migration 010; replaces the GYM_UPI_ID env var, kept as fallback) |
+| freeze_max_days_per_year | int default 30 | Migration 012. Paused days added back to the expiry on resume, capped over a rolling 365 days (0 = never) |
+| gstin | text | Migration 012. When set, receipts become tax invoices showing the 18% GST included in the price |
+
+### freeze_credits (migration 012)
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| membership_id, member_id | uuid FK (restrict) | |
+| days | int > 0 | Days added to the expiry on one resume |
+| credited_on | date | Kolkata date of the resume; the yearly cap sums the last 365 days |
+| staff_id | uuid FK → staff_users | Who resumed |
+
+RLS: staff read all, a member reads their own; no insert/update/delete policy — rows are written only by `resume_membership()`.
+
+### Database functions added in migration 012 (service role only)
+`create_desk_renewal` (desk Cash/UPI renewal → Pending payment; never extends), `refund_payment` (Paid → Refunded, owner chooses whether the days are taken back), `resume_membership` (atomic resume + freeze credit), `set_member_status` (Cancel / Block / Reactivate), `anonymise_member`, `backfill_attendance` (missed visit, last 30 days, audited), `member_pin_salt`, `data_quality_issues`.
 
 ### audit_logs (append-only, no delete policy for anyone)
 | Column | Type | Notes |

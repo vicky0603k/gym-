@@ -10,15 +10,6 @@ import { CHANNEL_LABELS, OUTCOME_LABELS } from "@/utils/follow-up-labels";
 import { daysUntilKolkata, formatDisplayDate, formatDisplayDateTime, toKolkataDateString } from "@/utils/dates";
 import { StatusBadge } from "@/components/status-badge";
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex justify-between gap-4 py-2">
-      <dt className="text-sm text-muted">{label}</dt>
-      <dd className="text-sm text-foreground text-right">{value}</dd>
-    </div>
-  );
-}
-
 export function CurrentMembership({ membership }: { membership: MembershipWithPlan | null }) {
   if (!membership) {
     return (
@@ -29,32 +20,26 @@ export function CurrentMembership({ membership }: { membership: MembershipWithPl
     );
   }
   const daysLeft = daysUntilKolkata(membership.expiry_date);
+  const expired = daysLeft < 0;
+  // The member's card, as staff see it: black, expiry large in volt (same design as member home).
   return (
-    <section className="card p-5">
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div>
-          <h2 className="text-sm text-muted">Current membership</h2>
-          <p className="text-lg font-semibold text-foreground">{membership.planName}</p>
-        </div>
-        <StatusBadge status={membership.status === "Active" && daysLeft < 0 ? "Expired" : membership.status} />
-      </div>
-      <dl className="divide-y divide-border">
-        <Row label="Started" value={formatDisplayDate(membership.start_date)} />
-        <Row
-          label="Expires"
-          value={
-            <>
-              <span className="font-semibold">{formatDisplayDate(membership.expiry_date)}</span>
-              <span className={daysLeft < 0 ? "block text-xs text-danger" : "block text-xs text-muted"}>
-                {daysLeft < 0 ? `${-daysLeft} days ago` : daysLeft === 0 ? "Today" : `${daysLeft} days left`}
-              </span>
-            </>
-          }
-        />
-        {membership.status === "Frozen" && membership.freeze_start && (
-          <Row label="Paused since" value={formatDisplayDate(membership.freeze_start)} />
+    <section className="rounded-lg bg-foreground p-5 text-background" aria-label="Current membership">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-semibold">{membership.planName}</p>
+        {membership.status === "Frozen" ? (
+          <span className="rounded-full bg-warning px-2.5 py-1 text-xs font-bold text-background">Paused</span>
+        ) : expired ? (
+          <span className="rounded-full bg-danger px-2.5 py-1 text-xs font-bold text-background">Expired</span>
+        ) : (
+          <span className="rounded-full bg-accent px-2.5 py-1 text-xs font-bold text-accent-foreground">Active</span>
         )}
-      </dl>
+      </div>
+      <p className="mt-4 text-sm text-background/70">{expired ? "Expired on" : "Expires"}</p>
+      <p className="num-display text-5xl uppercase text-accent">{formatDisplayDate(membership.expiry_date)}</p>
+      <p className="mt-2 text-sm text-background/70">
+        {expired ? `${-daysLeft} days ago` : daysLeft === 0 ? "Today" : `${daysLeft} days left`} · started {formatDisplayDate(membership.start_date)}
+        {membership.status === "Frozen" && membership.freeze_start && ` · paused since ${formatDisplayDate(membership.freeze_start)}`}
+      </p>
     </section>
   );
 }
@@ -122,7 +107,7 @@ export function RecentVisits({
       {visits.length > 0 && (
         <Link
           href={`/owner/members/${memberId}/attendance`}
-          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-accent min-h-[48px]"
+          className="mt-2 inline-flex min-h-[48px] items-center gap-1 text-sm font-medium text-foreground underline underline-offset-4"
         >
           Full attendance history <ChevronRight className="h-4 w-4" aria-hidden />
         </Link>
@@ -135,7 +120,7 @@ const CASE_LABEL: Record<MemberCase["status"], { text: string; tone: string }> =
   Open: { text: "On Red List", tone: "bg-danger/10 text-danger" },
   Contacted: { text: "Contacted", tone: "bg-warning/10 text-warning" },
   FollowUpDue: { text: "Follow-up due", tone: "bg-warning/10 text-warning" },
-  Returned: { text: "Returned", tone: "bg-accent/10 text-accent" },
+  Returned: { text: "Returned", tone: "bg-accent text-accent-foreground" },
   Closed: { text: "Closed", tone: "bg-surface-2 text-muted" },
 };
 
@@ -202,7 +187,7 @@ export function PaymentsSection({ payments }: { payments: PaymentDetail[] }) {
                 </span>
                 <span className="block text-xs text-muted">
                   {formatDisplayDate(toKolkataDateString(p.verifiedAt ?? p.createdAt))}
-                  {p.newExpiry && ` · valid till ${formatDisplayDate(p.newExpiry)}`}
+                  {p.newExpiry && p.status === "Paid" && ` · valid till ${formatDisplayDate(p.newExpiry)}`}
                 </span>
               </span>
               <StatusBadge status={paymentLabel(p)} />

@@ -33,6 +33,7 @@ describe("gymProfileSchema", () => {
     ["phone", "12345", "Enter a 10-digit mobile number"],
     ["mapsUrl", "https://example.com/where", "Paste the share link from Google Maps"],
     ["gymName", "A", "Enter the gym's name"],
+    ["gstin", "29ABCDE1234F1Z", "Enter the 15-character GSTIN, e.g. 29ABCDE1234F1Z5"],
   ])("rejects a bad %s", (field, value, message) => {
     const result = gymProfileSchema.safeParse({ ...profile, [field]: value });
     expect(result.success).toBe(false);
@@ -42,9 +43,10 @@ describe("gymProfileSchema", () => {
 
 describe("rulesSchema", () => {
   it("parses, de-duplicates and sorts renewal windows", () => {
-    expect(rulesSchema.parse({ noShowThresholdDays: "10", renewalWindows: "0, 7, 14 3,-3, 7" })).toEqual({
+    expect(rulesSchema.parse({ noShowThresholdDays: "10", renewalWindows: "0, 7, 14 3,-3, 7", freezeMaxDaysPerYear: "30" })).toEqual({
       noShowThresholdDays: 10,
       renewalWindows: [14, 7, 3, 0, -3],
+      freezeMaxDaysPerYear: 30,
     });
   });
 
@@ -54,13 +56,21 @@ describe("rulesSchema", () => {
     ["14, seven, 0", "Enter 2–8 whole numbers between -30 and 30, separated by commas"],
     ["45, 0", "Enter 2–8 whole numbers between -30 and 30, separated by commas"],
   ])("rejects windows %j", (renewalWindows, message) => {
-    const result = rulesSchema.safeParse({ noShowThresholdDays: "10", renewalWindows });
+    const result = rulesSchema.safeParse({ noShowThresholdDays: "10", renewalWindows, freezeMaxDaysPerYear: "30" });
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.issues[0].message).toBe(message);
   });
 
+  it.each(["-1", "366", "x"])("rejects a paused-days limit of %j", (freezeMaxDaysPerYear) => {
+    expect(rulesSchema.safeParse({ noShowThresholdDays: "10", renewalWindows: "7, 0", freezeMaxDaysPerYear }).success).toBe(false);
+  });
+
+  it("upper-cases a valid GSTIN", () => {
+    expect(gymProfileSchema.parse({ ...profile, gstin: "29abcde1234f1z5" }).gstin).toBe("29ABCDE1234F1Z5");
+  });
+
   it.each(["2", "61", "ten"])("rejects a Red List threshold of %j", (noShowThresholdDays) => {
-    expect(rulesSchema.safeParse({ noShowThresholdDays, renewalWindows: "7, 0" }).success).toBe(false);
+    expect(rulesSchema.safeParse({ noShowThresholdDays, renewalWindows: "7, 0", freezeMaxDaysPerYear: "30" }).success).toBe(false);
   });
 });
 
@@ -72,7 +82,7 @@ describe("validation happens before any database call", () => {
   });
 
   it("updateRules", async () => {
-    const result = await updateRules({ noShowThresholdDays: "10", renewalWindows: "7, 3" }, "s1");
+    const result = await updateRules({ noShowThresholdDays: "10", renewalWindows: "7, 3", freezeMaxDaysPerYear: "30" }, "s1");
     expect(result).toMatchObject({ ok: false, error: { fields: { renewalWindows: "Include 0 (the expiry day)" } } });
     expect(createServiceClient).not.toHaveBeenCalled();
   });
@@ -84,9 +94,5 @@ describe("validation happens before any database call", () => {
   });
 });
 
-describe("live database (pending)", () => {
-  it.todo("a member who turns off missed-visit messages has no WhatsApp button on the Red List");
-  it.todo("a member who turns off renewal reminders has no Remind button on Renewals");
-  it.todo("the landing page shows the saved plans, trainers, timings and map link");
-  it.todo("a new Red List threshold applies on the next scan");
-});
+// Message toggles reach the Red List / Renewals rows and a new threshold applies on the next scan: tests/db/checkin-redlist.test.ts.
+// Buttons hidden on screen and the landing page content: e2e/pilot.spec.ts.

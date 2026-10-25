@@ -15,9 +15,9 @@ export default async function PlansPage() {
   const isOwner = staff?.role === "Owner";
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl">
+    <div className="mx-auto w-full px-4 pb-8 pt-4 md:px-6 md:pt-6 max-w-3xl">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h1 className="text-2xl font-bold text-foreground">Plans</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Plans</h1>
         {isOwner && plans.length > 0 && (
           <Link href="/owner/plans/new" className="btn-primary inline-flex items-center gap-2 text-sm">
             <Plus className="h-4 w-4" aria-hidden /> Add plan

@@ -51,8 +51,4 @@ describe("getDashboardKPIs", () => {
   });
 });
 
-describe("live database (pending)", () => {
-  it.todo("every KPI matches a hand count from the seed data (Phase 11 done criterion)");
-  it.todo("7-day active counts distinct members, not check-ins");
-  it.todo("the daily cron marks a lapsed member Expired and leaves Paused / Frozen alone");
-});
+// KPIs vs a hand count, 7-day distinct members, daily expiry job: tests/db/members-addons.test.ts

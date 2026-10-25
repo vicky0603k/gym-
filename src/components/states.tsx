@@ -1,6 +1,11 @@
 import { AlertTriangle, Inbox } from "lucide-react";
 import { cn } from "@/utils/cn";
 
+/** A grey block shaped like the content it stands in for (UI.md §8 States). */
+export function Block({ className }: { className?: string }) {
+  return <div className={cn("animate-pulse rounded-md bg-surface-2", className)} aria-hidden />;
+}
+
 /** Loading skeleton — shimmering placeholder block */
 export function LoadingSkeleton({
   className,

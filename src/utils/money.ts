@@ -42,3 +42,15 @@ export function discountAmount(
   if (discountPct <= 0) return 0;
   return Math.floor((basePrice * discountPct) / 100);
 }
+
+/** GST rate for gym and fitness services (SAC 9997), used only when the gym has a GSTIN. */
+export const GST_RATE_PCT = 18;
+
+/**
+ * Split a GST-inclusive amount into taxable value and GST, in whole rupees.
+ * Prices in this app already include GST, so the total never changes.
+ */
+export function gstIncluded(amount: number, ratePct: number = GST_RATE_PCT): { taxable: number; gst: number } {
+  const taxable = Math.round((amount * 100) / (100 + ratePct));
+  return { taxable, gst: amount - taxable };
+}

@@ -4,7 +4,10 @@ import { ArrowLeft, MessageCircle } from "lucide-react";
 import { getPaymentDetail, receiptNumber } from "@/services/payments";
 import { paymentLabel } from "@/services/payment-labels";
 import { whatsAppLink } from "@/services/red-list";
-import { getGymName, siteOrigin } from "@/services/renewals";
+import { siteOrigin } from "@/services/renewals";
+import { getSettings } from "@/services/settings";
+import { getCurrentStaff } from "@/services/auth";
+import { RefundDialog } from "./refund-dialog";
 import { formatDisplayDate } from "@/utils/dates";
 import { formatRupees } from "@/utils/money";
 import { PrintButton } from "@/components/print-button";
@@ -15,8 +18,9 @@ export const metadata = { title: "Receipt" };
 
 /** Staff view of a renewal payment; Paid ones render the shareable receipt. */
 export default async function OwnerReceiptPage({ params }: { params: { id: string } }) {
-  const [payment, gymName] = await Promise.all([getPaymentDetail(params.id), getGymName()]);
+  const [payment, settings, staff] = await Promise.all([getPaymentDetail(params.id), getSettings(), getCurrentStaff()]);
   if (!payment) notFound();
+  const gymName = settings.gym_name || "Your gym";
 
   // API.md "Payment success" template, fully rendered.
   const share =
@@ -25,7 +29,7 @@ export default async function OwnerReceiptPage({ params }: { params: { id: strin
       : null;
 
   return (
-    <div className="p-4 md:p-6 max-w-xl space-y-4">
+    <div className="mx-auto w-full px-4 pb-8 pt-4 md:px-6 md:pt-6 max-w-2xl space-y-4">
       <Link
         href={`/owner/members/${payment.memberId}`}
         className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground min-h-[48px] print:hidden"
@@ -34,7 +38,7 @@ export default async function OwnerReceiptPage({ params }: { params: { id: strin
       </Link>
       {payment.status === "Paid" ? (
         <>
-          <Receipt payment={payment} gymName={gymName} />
+          <Receipt payment={payment} gymName={gymName} gstin={settings.gstin} />
           <div className="grid gap-3 sm:grid-cols-2 print:hidden">
             {share && (
               <a
@@ -48,6 +52,11 @@ export default async function OwnerReceiptPage({ params }: { params: { id: strin
             )}
             <PrintButton />
           </div>
+          {staff?.role === "Owner" && (
+            <div className="print:hidden">
+              <RefundDialog paymentId={payment.id} memberName={payment.memberName} amount={payment.amount} purpose={payment.purpose} />
+            </div>
+          )}
         </>
       ) : (
         <section className="card p-5">
@@ -63,7 +72,9 @@ export default async function OwnerReceiptPage({ params }: { params: { id: strin
           <p className="mt-3 text-sm text-muted">
             {payment.status === "Pending"
               ? "Not verified yet — verify or reject it from Renewals."
-              : "This payment was not confirmed, so no receipt exists and the membership was not changed."}
+              : payment.status === "Refunded"
+                ? "This payment was refunded. The reason and whether the membership days were taken back are in the audit log."
+                : "This payment was not confirmed, so no receipt exists and the membership was not changed."}
           </p>
           {payment.status === "Pending" && (
             <Link href="/owner/renewals" className="btn-primary mt-4 flex w-full items-center justify-center">

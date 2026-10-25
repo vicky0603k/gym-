@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   AlertTriangle,
   Ban,
+  Check,
   CalendarX,
   CircleCheck,
   Clock,
@@ -16,6 +17,8 @@ import {
 import type { CheckInResult } from "@/services/attendance";
 import { formatDisplayTime } from "@/utils/dates";
 import { cn } from "@/utils/cn";
+import { InstallPrompt } from "@/components/install-prompt";
+import { VisitSegments } from "@/components/ui/bits";
 
 type Screen = { icon: LucideIcon; tone: string; title: string; message: string; scanAgain?: boolean };
 
@@ -31,12 +34,12 @@ function screenFor(result: CheckInResult | "offline"): Screen {
     };
   }
   if (result.ok) {
-    return { icon: CircleCheck, tone: "text-accent", title: "You're checked in", message: `Checked in at ${formatDisplayTime(result.checkinAt)}.` };
+    return { icon: CircleCheck, tone: "text-success", title: "You're checked in", message: `Checked in at ${formatDisplayTime(result.checkinAt)}.` };
   }
   const { code, message } = result.error;
   switch (code) {
     case "DUPLICATE_CHECKIN":
-      return { icon: Clock, tone: "text-accent", title: "Already checked in", message };
+      return { icon: Clock, tone: "text-foreground", title: "Already checked in", message };
     case "QR_EXPIRED":
       return { icon: TimerOff, tone: "text-warning", title: "QR expired", message, scanAgain: true };
     case "QR_INVALID":
@@ -60,18 +63,26 @@ export function CheckInResultScreen({ result, onScanAgain }: { result: CheckInRe
 
   return (
     <div className="flex min-h-[calc(100vh-8rem)] flex-col items-center justify-center px-6 text-center animate-fade-in" role="status">
-      <s.icon className={cn("mb-5 h-20 w-20", s.tone)} aria-hidden />
+      {result !== "offline" && result.ok ? (
+        // Success is the one big volt moment: a filled disc with a black tick (volt is never a thin line on white).
+        <span className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-accent text-accent-foreground" aria-hidden>
+          <Check className="h-12 w-12" strokeWidth={3} />
+        </span>
+      ) : (
+        <s.icon className={cn("mb-5 h-20 w-20", s.tone)} aria-hidden />
+      )}
       <h1 className="mb-2 text-2xl font-bold text-foreground">{s.title}</h1>
       <p className="max-w-xs text-base text-muted">{s.message}</p>
 
       {result !== "offline" && result.ok && (
-        <div className="mt-6 w-full max-w-xs card p-4">
+        <div className="mt-6 w-full max-w-xs card p-4 text-left">
           <p className="text-sm text-muted">This week</p>
-          <p className="text-foreground">
-            <span className="kpi-number">{result.weeklyGoal.completed}</span>
+          <p className="mb-3 text-foreground">
+            <span className="num-display text-5xl">{result.weeklyGoal.completed}</span>
             <span className="text-lg text-muted"> of {result.weeklyGoal.target} visits</span>
           </p>
-          {result.caseResolved && <p className="mt-2 text-sm text-accent">Welcome back — good to see you again!</p>}
+          <VisitSegments done={result.weeklyGoal.completed} target={result.weeklyGoal.target} />
+          {result.caseResolved && <p className="mt-2 text-sm font-semibold text-success">Welcome back — good to see you again!</p>}
         </div>
       )}
 
@@ -90,6 +101,7 @@ export function CheckInResultScreen({ result, onScanAgain }: { result: CheckInRe
           {result !== "offline" && result.ok ? "Done" : "Back to home"}
         </Link>
       </div>
+      <InstallPrompt show={result !== "offline" && result.ok} />
     </div>
   );
 }

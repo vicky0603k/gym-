@@ -88,6 +88,7 @@ export interface PaymentDetail {
   discount: number;
   status: Payment["status"];
   providerRef: string | null;
+  method: Payment["method"];
   createdAt: string;
   verifiedAt: string | null;
   planName: string; // the plan renewed, or the add-on bought
@@ -139,6 +140,7 @@ async function withOrders(payments: Payment[]): Promise<PaymentDetail[]> {
       amount: p.amount,
       status: p.status,
       providerRef: p.provider_ref,
+      method: p.method ?? "UPI",
       createdAt: p.created_at,
       verifiedAt: p.verified_at,
     };
@@ -277,4 +279,92 @@ export async function cancelPayment(memberId: string, paymentId: unknown): Promi
   if (error || !data) return { ok: false, error: { code: "INVALID_STATE", message: "We couldn't cancel this order. Please try again." } };
   if (!data.ok) return { ok: false, error: { code: data.code, message: CANCEL_ERRORS[data.code] } };
   return { ok: true, data: undefined };
+}
+
+export const deskRenewalSchema = z
+  .object({
+    planId: z.string().uuid("Choose a plan"),
+    method: z.enum(["UPI", "Cash"], { errorMap: () => ({ message: "Choose how the member paid" }) }),
+    reference: z.string().trim().optional(),
+  })
+  .refine((v) => v.method === "Cash" || /^[A-Za-z0-9]{6,30}$/.test(v.reference ?? ""), {
+    path: ["reference"],
+    message: "Enter the UPI reference (UTR) from the payment screen",
+  });
+
+const DESK_ERRORS: Record<string, string> = {
+  FORBIDDEN: "This member can't be renewed — they are cancelled or blocked.",
+  VALIDATION: "Check the plan, payment method and reference.",
+  DUPLICATE_REFERENCE: "This UPI reference is already used on another payment.",
+  NOT_FOUND: "This member no longer exists.",
+  PLAN_UNAVAILABLE: "This plan is no longer offered. Choose another plan.",
+  PAYMENT_CLAIMED: "The member already sent a UPI reference for a renewal. Verify or reject that one in Renewals first.",
+};
+
+/**
+ * Front desk records a renewal paid at the counter (A1). Creates the order and a
+ * Pending payment with its method and reference in one transaction
+ * (create_desk_renewal(), migration 012). Nothing is extended here: only
+ * verify_payment() does that, and only the owner can call it.
+ */
+export async function createDeskRenewal(
+  memberId: string,
+  input: unknown,
+  staffId: string
+): Promise<ActionResult<{ paymentId: string; reference: string; amount: number }>> {
+  const parsed = deskRenewalSchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+  const { planId, method, reference } = parsed.data;
+
+  const { data, error } = await createServiceClient().rpc("create_desk_renewal", {
+    p_member_id: memberId,
+    p_plan_id: planId,
+    p_method: method,
+    p_reference: method === "UPI" ? reference ?? null : null,
+    p_staff_id: staffId,
+  });
+  if (error || !data) return { ok: false, error: { code: "INVALID_STATE", message: RPC_FAILED } };
+  if (!data.ok) {
+    const fields = data.code === "DUPLICATE_REFERENCE" ? { reference: DESK_ERRORS.DUPLICATE_REFERENCE } : undefined;
+    return { ok: false, error: { code: data.code, message: DESK_ERRORS[data.code], fields } };
+  }
+  return { ok: true, data: { paymentId: data.payment_id, reference: data.reference, amount: data.amount } };
+}
+
+export const refundInputSchema = z.object({
+  paymentId: z.string().uuid("This payment could not be found"),
+  reason: z
+    .string({ required_error: "Enter why this payment is being refunded" })
+    .trim()
+    .min(3, "Enter why this payment is being refunded")
+    .max(200, "Keep the reason under 200 characters"),
+  // Checkbox: present = take the membership days back.
+  reverse: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
+});
+
+const REFUND_ERRORS: Record<string, string> = {
+  FORBIDDEN: "Only the owner can refund payments.",
+  VALIDATION: "Enter why this payment is being refunded.",
+  NOT_FOUND: "Payment not found.",
+  ALREADY_REFUNDED: "This payment has already been refunded.",
+  INVALID_STATE: "Only a paid payment can be refunded.",
+};
+
+/**
+ * Owner refunds a Paid payment (A4). The row becomes Refunded (never deleted);
+ * the owner chooses whether the membership days it bought are taken back.
+ * One transaction with its audit row (refund_payment(), migration 012).
+ */
+export async function refundPayment(input: unknown, staffId: string): Promise<ActionResult<{ newExpiry: string | null }>> {
+  const parsed = refundInputSchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+  const { data, error } = await createServiceClient().rpc("refund_payment", {
+    p_payment_id: parsed.data.paymentId,
+    p_staff_id: staffId,
+    p_reason: parsed.data.reason,
+    p_reverse: parsed.data.reverse,
+  });
+  if (error || !data) return { ok: false, error: { code: "INVALID_STATE", message: RPC_FAILED } };
+  if (!data.ok) return { ok: false, error: { code: data.code, message: REFUND_ERRORS[data.code] } };
+  return { ok: true, data: { newExpiry: data.new_expiry } };
 }

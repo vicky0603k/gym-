@@ -10,6 +10,9 @@ import { EmptyState } from "@/components/states";
 import { StatusBadge } from "@/components/status-badge";
 import { PendingPayment } from "./pending-payment";
 import { PlanPicker } from "./plan-picker";
+import { Card } from "@/components/ui/card";
+import { List, ListRow } from "@/components/ui/list";
+import { Page, PageHeader } from "@/components/ui/page";
 
 export const metadata = { title: "Renew" };
 
@@ -26,9 +29,9 @@ export default async function RenewPage() {
 
   if (!membership) {
     return (
-      <div className="px-6 py-6 max-w-md mx-auto">
+      <Page>
         <EmptyState icon={<IdCard className="h-10 w-10" />} title="No membership to renew" message="Please visit the front desk to start a membership." />
-      </div>
+      </Page>
     );
   }
 
@@ -39,30 +42,28 @@ export default async function RenewPage() {
   const offered = plans.filter((p) => p.is_active);
 
   return (
-    <div className="px-6 py-6 max-w-md mx-auto space-y-5">
-      <h1 className="text-2xl font-bold text-foreground">Renew membership</h1>
+    <Page className="space-y-4">
+      <PageHeader title="Renew membership" className="mb-1" />
 
-      <section className="card p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm text-muted">Current plan</p>
-            <p className="text-lg font-semibold text-foreground">{membership.planName}</p>
-          </div>
-          <StatusBadge status={membership.status === "Active" && daysLeft < 0 ? "Expired" : membership.status} />
+      <Card tone="dark" pad="sm" className="flex items-center justify-between gap-3 px-5">
+        <div className="min-w-0">
+          <p className="truncate text-sm text-background/70">
+            {membership.planName} · {daysLeft < 0 ? "expired on" : "valid till"}
+          </p>
+          <p className="num-display text-3xl uppercase text-accent">{formatDisplayDate(membership.expiry_date)}</p>
         </div>
-        <p className="mt-3 text-sm text-muted">{daysLeft < 0 ? "Expired on" : "Valid till"}</p>
-        <p className="text-lg font-semibold text-foreground">{formatDisplayDate(membership.expiry_date)}</p>
-      </section>
+        <StatusBadge status={membership.status === "Active" && daysLeft < 0 ? "Expired" : membership.status} />
+      </Card>
 
       {justPaid && (
-        <section className="card border-accent/40 p-5" role="status">
+        <section className="card border-success/40 p-5" role="status">
           <p className="flex items-center gap-2 font-semibold text-foreground">
-            <CircleCheck className="h-5 w-5 text-accent" aria-hidden /> Payment confirmed
+            <CircleCheck className="h-5 w-5 text-success" aria-hidden /> Payment confirmed
           </p>
           <p className="mt-1 text-sm text-muted">
             {justPaid.planName} renewed{justPaid.newExpiry ? ` — valid till ${formatDisplayDate(justPaid.newExpiry)}` : ""}.
           </p>
-          <Link href={`/member/payments/${justPaid.id}`} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-accent min-h-[40px]">
+          <Link href={`/member/payments/${justPaid.id}`} className="mt-3 inline-flex min-h-[40px] items-center gap-1 text-sm font-medium text-foreground underline underline-offset-4">
             View receipt <ChevronRight className="h-4 w-4" aria-hidden />
           </Link>
         </section>
@@ -100,7 +101,7 @@ export default async function RenewPage() {
           <PlanPicker plans={offered} currentExpiry={membership.expiry_date} replacesPending={Boolean(pending)} />
         ))}
 
-      <details className="card p-4 text-sm text-muted">
+      <details className="rounded-lg bg-surface p-4 text-sm text-muted">
         <summary className="cursor-pointer font-medium text-foreground min-h-[32px]">How renewal works</summary>
         <ul className="mt-2 list-disc space-y-1 pl-5">
           <li>The price shown is the final amount you pay, after any discount.</li>
@@ -111,11 +112,10 @@ export default async function RenewPage() {
       </details>
 
       {payments.length > 0 && (
-        <Link href="/member/payments" className="card flex items-center justify-between p-4 min-h-[56px] hover:bg-surface-2">
-          <span className="text-foreground">Payments and receipts</span>
-          <ChevronRight className="h-4 w-4 text-muted" aria-hidden />
-        </Link>
+        <List>
+          <ListRow href="/member/payments" title="Payments and receipts" meta={`${payments.length} renewal ${payments.length === 1 ? "payment" : "payments"}`} />
+        </List>
       )}
-    </div>
+    </Page>
   );
 }

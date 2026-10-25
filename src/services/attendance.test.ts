@@ -147,11 +147,6 @@ describe("assistedCheckIn", () => {
   });
 });
 
-// Need a connected Supabase project — run after the database is connected.
-describe("check_in() against a live database (pending)", () => {
-  it.todo("two simultaneous scans for one member write exactly one attendance row");
-  it.todo("a Blocked member with an Active membership row is refused");
-  it.todo("a successful check-in resolves an open no-show case as Returned");
-  it.todo("an assisted check-in writes an attendance.assisted audit row");
-  it.todo("a screenshot of the gate QR scanned 2 minutes later writes nothing");
-});
+// Database rules (one row for repeat scans, Blocked refused, case resolved, assisted audit):
+// tests/db/checkin-redlist.test.ts and tests/live/live.test.ts (truly simultaneous scans).
+// A 2-minute-old QR screenshot is refused above ("rejects an old token as expired").

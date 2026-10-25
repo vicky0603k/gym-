@@ -1,11 +1,13 @@
-import Link from "next/link";
-import { Apple, ChevronRight, Dumbbell, Package, ShoppingBag } from "lucide-react";
+import { Apple, Dumbbell, Package, ShoppingBag } from "lucide-react";
 import { requireMember } from "@/services/auth";
 import { listAddons, listMemberAddonOrders, type CatalogueItem, type OrderRow } from "@/services/addons";
 import { addDaysToDate, formatDisplayDate, toKolkataDateString } from "@/utils/dates";
 import { formatRupees } from "@/utils/money";
 import { EmptyState } from "@/components/states";
 import { BuyDialog } from "./buy-dialog";
+import { Badge } from "@/components/ui/badge";
+import { List, ListRow } from "@/components/ui/list";
+import { Page, PageHeader, Section } from "@/components/ui/page";
 
 export const metadata = { title: "Add-ons" };
 
@@ -16,7 +18,7 @@ const GROUPS = [
 ] as const;
 
 function detailLine(item: CatalogueItem): string {
-  if (item.type === "PT") return `${item.sessions} sessions · use within ${item.validity_days} days${item.trainerName ? ` · ${item.trainerName}` : ""}`;
+  if (item.type === "PT") return `${item.sessions} sessions · use within ${item.validity_days} days`;
   if (item.type === "Diet") return `${item.validity_days}-day plan`;
   return (item.stock ?? 0) > 0 ? `${item.stock} in stock` : "Out of stock";
 }
@@ -38,29 +40,22 @@ export default async function MemberAddonsPage() {
   const mine = orders.filter((o) => o.status !== "Cancelled" && o.status !== "Refunded").slice(0, 10);
 
   return (
-    <div className="px-6 py-6 max-w-md mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Add-ons</h1>
+    <Page>
+      <PageHeader title="Add-ons" description="Personal training, diet plans and products from the front desk." />
 
       {mine.length > 0 && (
-        <section aria-labelledby="mine-heading">
-          <h2 id="mine-heading" className="mb-2 text-lg font-semibold text-foreground">My add-ons</h2>
-          <ul className="card divide-y divide-border">
+        <Section title="My add-ons" id="mine-heading" className="mt-0">
+          <List>
             {mine.map((o) => (
-              <li key={o.id}>
-                <Link
-                  href={o.status === "Pending" ? `/member/add-ons/pay/${o.payment_id}` : `/member/payments/${o.payment_id}`}
-                  className="flex items-center gap-3 px-4 py-3 min-h-[64px] hover:bg-surface-2"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-foreground">{o.title}</span>
-                    <span className={o.status === "Pending" ? "block text-sm text-warning" : "block text-sm text-muted"}>{orderLine(o)}</span>
-                  </span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />
-                </Link>
-              </li>
+              <ListRow
+                key={o.id}
+                href={o.status === "Pending" ? `/member/add-ons/pay/${o.payment_id}` : `/member/payments/${o.payment_id}`}
+                title={o.title}
+                meta={<span className={o.status === "Pending" ? "text-warning" : undefined}>{orderLine(o)}</span>}
+              />
             ))}
-          </ul>
-        </section>
+          </List>
+        </Section>
       )}
 
       {catalogue.length === 0 ? (
@@ -70,19 +65,29 @@ export default async function MemberAddonsPage() {
           const items = catalogue.filter((c) => c.type === g.type);
           if (!items.length) return null;
           return (
-            <section key={g.type} aria-labelledby={`group-${g.type}`}>
-              <h2 id={`group-${g.type}`} className="mb-2 flex items-center gap-2 text-lg font-semibold text-foreground">
-                <g.icon className="h-5 w-5 text-accent" aria-hidden /> {g.title}
-              </h2>
-              <ul className="space-y-3">
+            <Section
+              key={g.type}
+              id={`group-${g.type}`}
+              title={
+                <span className="flex items-center gap-2">
+                  <g.icon className="h-5 w-5" aria-hidden /> {g.title}
+                </span>
+              }
+            >
+              <ul className="space-y-2">
                 {items.map((item) => (
-                  <li key={item.id} className="card p-4">
+                  <li key={item.id} className="rounded-lg bg-surface p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-semibold text-foreground">{item.title}</p>
                         <p className="text-sm text-muted">{detailLine(item)}</p>
+                        {item.type === "PT" && item.trainerName && (
+                          <Badge tone="dark" size="sm" className="mt-2">
+                            With {item.trainerName}
+                          </Badge>
+                        )}
                       </div>
-                      <p className="shrink-0 text-lg font-bold tabular-nums text-foreground">{formatRupees(item.price)}</p>
+                      <p className="num-display shrink-0 text-3xl text-foreground">{formatRupees(item.price)}</p>
                     </div>
                     {item.description && <p className="mt-2 line-clamp-3 text-sm text-muted">{item.description}</p>}
                     <div className="mt-3">
@@ -91,10 +96,10 @@ export default async function MemberAddonsPage() {
                   </li>
                 ))}
               </ul>
-            </section>
+            </Section>
           );
         })
       )}
-    </div>
+    </Page>
   );
 }

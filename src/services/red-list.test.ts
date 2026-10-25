@@ -136,10 +136,5 @@ describe("no-show WhatsApp message", () => {
   });
 });
 
-describe("live database (pending)", () => {
-  it.todo("running the scan twice on one day opens no duplicate case");
-  it.todo("a Paused / Frozen / Expired / Cancelled member never appears on the Red List");
-  it.todo("a member who joined yesterday or just resumed from a pause is not flagged");
-  it.todo("a return check-in resolves the case as Returned and its follow-ups stay visible");
-  it.todo("a Contacted case becomes FollowUpDue when its next action date arrives");
-});
+// Scan idempotency, exclusions, new/resumed members, FollowUpDue, Returned with follow-ups kept:
+// tests/db/checkin-redlist.test.ts

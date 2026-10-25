@@ -11,10 +11,11 @@ How the app is deployed for the pilot, and how updates are shipped. Stack: Verce
 ## 2. Supabase setup (production)
 
 1. Create the project; note the project URL and keys.
-2. In the SQL editor (or via the Supabase CLI), run migrations in order: `supabase/migrations/001_*.sql`, `002_*.sql` (RLS policies), `003_*.sql` (indexes/constraints).
+2. In the SQL editor (or via the Supabase CLI), run **every** migration in order, one file at a time: `001_tables.sql` … `012_desk_refund_freeze_staff.sql`. Run each file once; a second run fails with "already exists" and changes nothing.
 3. **Do not run `seed.sql` in production**, except: create the real owner account (Supabase Auth user + `staff_users` row) and the gym's real `settings` row and plans.
 4. Confirm RLS is enabled on every table (Table Editor → table → RLS) and run the member-isolation check from `TESTING.md` against a test member before real members are imported.
-5. Import the gym's real members only after the owner has verified the list (count must match the gym's source record — register/app export).
+5. Import the gym's real members only after the owner has verified the list (count must match the gym's source record — register/app export): `node scripts/import-members.mjs members.csv` (dry run), then `--commit`. The PIN list it writes to `private/` is for handing PINs over in person — never share or commit it.
+6. Add front-desk logins from Owner → Settings → Staff logins (no SQL needed after the first owner).
 
 ## 3. Vercel setup
 
@@ -65,10 +66,10 @@ A short, gym-branded domain makes the member link and QR standee trustworthy (ex
 - Ship updates via git push → Vercel auto-deploys. Prefer deploying in the gym's off-hours; run the §4 smoke tests after every deploy.
 - Database changes are always new numbered migration files — never edit a migration that has already run in production.
 - Monitor weekly during the pilot: Vercel deployment status, Supabase usage (free-tier limits), cron run results, and the data-quality alerts (Paid without reference, negative stock).
-- Backups: rely on Supabase backups plus a weekly manual export of `members`, `memberships`, `payments` during the pilot month.
+- Backups: rely on Supabase backups plus `npm run backup` weekly during the pilot month (every business table to `backups/<date>/*.csv`, PIN hashes excluded; keep the folder private).
 
 ## 8. Rollback and recovery
 
 - App rollback: Vercel one-click promote of the previous deployment (§4).
 - Data mistakes: correct through the app's own flows (which write audit entries) — never hand-edit production financial or attendance rows in the SQL editor except in a genuine emergency, and record any such fix in `docs/decisions.md` with date and reason.
-- If Supabase/Vercel is down: the gym falls back to the paper register for that day, and staff backfill attendance afterwards using assisted check-in with the reason "system down backfill".
+- If Supabase/Vercel is down: the gym falls back to the paper register for that day, and staff add those visits afterwards from the member's page → **Add missed visit** (date, time, reason; audited).

@@ -79,3 +79,9 @@ A log of the important choices made for this project, why they were made, and wh
 ### ADR-011 — No offline check-in queue in the MVP (confirmation)
 **Status:** Accepted (23 Oct 2026, resolving a direct contradiction between ARCHITECTURE.md and the Kiro spec design.md)
 **Decision:** ARCHITECTURE.md §5 is binding: attendance is never queued offline in the MVP. The member sees the offline page and is directed to front-desk assisted check-in. The spec design.md note suggesting a basic offline queue is removed; an audited offline queue is a Phase 2 candidate only.
+
+### ADR-012 — Light "Iron & Volt" theme replaces the dark theme
+**Status:** Accepted (25 Oct 2026, owner's choice from three mockups: Plate Blue, Sand & Sport Orange, Iron & Volt)
+**Decision:** Replace the dark near-black + acid-lime theme with a light white/black theme with one volt accent (`#C6F432`), Archivo as the single typeface (loaded with `next/font`), condensed display figures, a black membership card on member home and the weekly goal drawn as plates on a bar. Tokens in `DESIGN.md` §2; rules in `UI.md` §3.
+**Why:** The owner chose it. The dark lime look read as a generic generated template, and a light high-contrast screen reads better in bright gym light on mid-range phones. The declared font (Inter) was never loaded, so every screen used the phone's system font.
+**Consequence:** Volt cannot be used as text, icon or line colour on light surfaces (1.3:1); every former `text-accent` was re-mapped by meaning. When the gym's logo arrives, its brand colour can replace volt through the tokens only, after re-checking contrast.

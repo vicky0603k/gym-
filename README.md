@@ -43,7 +43,9 @@ npm run dev                  # http://localhost:3000
 
 ## Status
 
-Pre-development. All planning documents are complete and ready to load into Kiro. Build follows `TASKS.md` one module at a time, with the tests in `TESTING.md` passing before the next module starts.
+Built and tested; ready for the pilot set-up (25 Oct 2026). Phases 1–12 of `PHASE_PLAN.md` are in the code, including desk payments (cash/UPI), refunds, staff logins, PIN reset, pause credit and member import. What is left before go-live is listed in `GAPS.md` — mainly items only the gym or the owner can provide (deploy account, real phone test, logo/photos, prices).
+
+Tests: `npm test` (unit + database rules on the real migrations), `npm run test:live` (real Supabase API and RLS, test project only), `npm run test:e2e` (Playwright pilot journey at 375px). Results: `tests/failure-checklist-result.md`.
 
 ## Pilot model
 

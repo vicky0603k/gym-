@@ -12,9 +12,28 @@ UI/UX design specification. Business scope lives in `PRD.md`; data and APIs live
 
 ## 2. Visual system
 
-- **Theme:** Dark gym aesthetic — near-black background (`#0B0F0C` range), card surfaces one step lighter, high contrast text.
-- **Accent:** One energetic accent colour (lime/volt green family) for primary actions, streaks and success. Red reserved strictly for risk (Red List, expired, failed payment). Amber for warnings (due soon, pending).
-- **Typography:** Large, bold numerals for KPIs and streaks; body text minimum 16px on member screens (many members will read it in bright gym light, one-handed).
+- **Theme — "Iron & Volt" (light, ADR-012, 25 Oct 2026):** white and black like a sportswear brand, one neon-yellow "volt" highlight, tall condensed numbers. Light and high-contrast so it reads in bright gym light. Full rationale and rules in `UI.md` §3.
+- **Colour tokens** (`tailwind.config.ts` is the single source; no hex values in components):
+
+  | Token | Value | Role |
+  |---|---|---|
+  | `background` | `#FFFFFF` | Page ground |
+  | `surface` | `#F3F3EF` | Cards, bottom nav, sidebar |
+  | `surface-2` | `#E8E8E2` | Chips, skeletons, hover, empty plate slots |
+  | `border` | `#E2E2DC` | Dividers, card outlines |
+  | `border-strong` | `#7A7A72` | Input outlines (meets 3:1 for form controls) |
+  | `foreground` | `#0E0E0E` | Text, icons, black buttons, the membership card |
+  | `muted` | `#5E5E58` | Secondary text (6.5:1 on white) |
+  | `accent` | `#C6F432` | Volt — **fill only**: primary button, active nav pill, goal met, Active/Paid badges, the date on the black membership card |
+  | `accent-foreground` | `#0E0E0E` | Text on volt |
+  | `accent-muted` | `#B4E11F` | Volt hover/pressed |
+  | `success` | `#2E7D0F` | Success text and icons |
+  | `warning` | `#B45309` | Due soon, pending, paused only |
+  | `danger` | `#C62828` | Risk only — Red List, expired, failed payment |
+
+  Volt on white is 1.3:1: it is never text, an icon, a focus ring or a thin line on a light surface — only a fill under black text, or text on a black surface.
+- **Typography:** Archivo (variable, width axis) via `next/font`, latin + latin-ext (₹ glyph). Body/UI at normal width 400–700; member body text ≥ 16px. Display figures (expiry date, visits, KPIs, prices) use `.num-display` / `.kpi-number`: condensed (`font-stretch: 72%`), 800–900 weight, tabular figures. Uppercase only on the big hero figures; everything else sentence case.
+- **Signature details:** member home is a black membership card with the expiry in condensed volt; the weekly goal is shown as plates loading on a bar; primary actions are volt with black text; the active nav item sits on a black tile (mockup C). Shared primitives: `src/components/ui/`.
 - **Tap targets:** Minimum 48px height for all primary buttons and list actions (Call, WhatsApp, Mark Outcome).
 - **Currency:** All amounts in ₹ with Indian formatting (`en-IN`), e.g. ₹1,20,000 — never $ or Western grouping.
 - **Language:** Simple English labels; short Hinglish phrases allowed in member-facing motivational copy and message templates (see API.md templates). No Hinglish in owner financial screens.

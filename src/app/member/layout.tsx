@@ -1,6 +1,6 @@
 import { CreditCard, Home, Menu, ScanLine, ShoppingBag } from "lucide-react";
 import { NavLink } from "@/components/nav-link";
-import { LogoutButton } from "@/components/logout-button";
+import { InstallPrompt } from "@/components/install-prompt";
 
 /**
  * Member layout — bottom navigation, mobile-first, 56px tap targets.
@@ -22,13 +22,12 @@ export default function MemberLayout({
 }) {
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="flex justify-end px-4 pt-2 max-w-md w-full mx-auto">
-        <LogoutButton />
-      </header>
-      <main className="flex-1 pb-16">{children}</main>
+      <main className="flex-1 pb-20">{children}</main>
+      {/* Renders nothing; loads the install hook on every member page so Chrome's one-time event is caught. */}
+      <InstallPrompt show={false} />
 
       {/* Bottom navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-40">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background pb-[env(safe-area-inset-bottom)]">
         <div className="flex justify-around items-stretch max-w-md mx-auto">
           {navItems.map((item) => (
             <NavLink
@@ -36,10 +35,13 @@ export default function MemberLayout({
               href={item.href}
               exact={item.exact}
               also={"also" in item ? item.also : undefined}
-              className="flex flex-col items-center justify-center gap-1 px-4 py-2 min-h-[56px] transition-colors flex-1"
+              className="flex flex-1 flex-col items-center justify-center gap-0.5 whitespace-nowrap px-1 py-1.5 min-h-[60px] transition-colors"
             >
-              <item.icon className="h-5 w-5" aria-hidden />
-              <span className="text-xs font-medium">{item.label}</span>
+              {/* Active tab: the icon sits on a black tile (mockup C). */}
+              <span className="flex h-8 w-12 items-center justify-center rounded-md transition-colors group-aria-[current=page]:bg-foreground group-aria-[current=page]:text-background">
+                <item.icon className="h-5 w-5" aria-hidden />
+              </span>
+              <span className="text-xs">{item.label}</span>
             </NavLink>
           ))}
         </div>

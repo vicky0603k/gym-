@@ -6,6 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Pause, Play, X } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, FormField } from "@/components/form-field";
+import { formatDisplayDate } from "@/utils/dates";
 import { pauseMemberAction, resumeMemberAction } from "../actions";
 
 /** Pause (reason required) or resume, always confirmed in an app dialog. */
@@ -27,7 +28,12 @@ export function StatusDialog({ memberId, memberName, paused }: { memberId: strin
         setError({ field: result.error.fields?.reason, message: result.error.fields ? undefined : result.error.message });
         return;
       }
-      toast.success(paused ? `${memberName}'s membership resumed` : `${memberName}'s membership paused`);
+      const added = result.data && "daysAdded" in result.data ? result.data : null;
+      toast.success(
+        added
+          ? `${memberName}'s membership resumed — ${added.daysAdded} day${added.daysAdded === 1 ? "" : "s"} added, valid till ${formatDisplayDate(added.newExpiry)}`
+          : `${memberName}'s membership ${paused ? "resumed" : "paused"}`
+      );
       setOpen(false);
       setReason("");
       router.refresh();
@@ -46,13 +52,13 @@ export function StatusDialog({ memberId, memberName, paused }: { memberId: strin
         setError({});
       }}
     >
-      <Dialog.Trigger className={paused ? "btn-primary inline-flex items-center gap-2" : "btn-danger inline-flex items-center gap-2"}>
+      <Dialog.Trigger className={paused ? "btn-primary px-3 whitespace-nowrap" : "btn-danger px-3 whitespace-nowrap"}>
         {paused ? <Play className="h-4 w-4" aria-hidden /> : <Pause className="h-4 w-4" aria-hidden />}
         {paused ? "Resume" : "Pause"}
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 animate-fade-in" />
-        <Dialog.Content className="fixed z-50 inset-x-4 bottom-4 sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md card p-5 animate-slide-up">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/50 animate-fade-in" />
+        <Dialog.Content className="fixed z-50 inset-x-4 bottom-4 sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md rounded-lg border border-border bg-background p-5 shadow-xl animate-slide-up">
           <div className="flex items-start justify-between gap-3 mb-2">
             <Dialog.Title className="text-lg font-semibold text-foreground">
               {paused ? `Resume ${memberName}?` : `Pause ${memberName}?`}
@@ -63,7 +69,7 @@ export function StatusDialog({ memberId, memberName, paused }: { memberId: strin
           </div>
           <Dialog.Description className="text-sm text-muted mb-4">
             {paused
-              ? "Their membership becomes active again from today and they can check in."
+              ? "Their membership becomes active again from today and they can check in. The days spent paused are added to the expiry, up to the yearly limit set in Settings."
               : "Their membership is frozen from today. They cannot check in and will not appear on the Red List until resumed."}
           </Dialog.Description>
           <form onSubmit={onSubmit} className="space-y-4" noValidate>
