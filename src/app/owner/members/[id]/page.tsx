@@ -8,6 +8,8 @@ import { listMemberPayments } from "@/services/payments";
 import { getActivePlans } from "@/services/memberships";
 import { formatDisplayDate, todayKolkata } from "@/utils/dates";
 import { formatPhone } from "@/utils/phone";
+import { formatMemberCode } from "@/utils/member-code";
+import { getMemberIdPrefix } from "@/services/settings";
 import { StatusBadge } from "@/components/status-badge";
 import { CurrentMembership, MembershipHistory, PaymentsSection, RecentVisits, RedListHistory } from "./sections";
 import { StatusDialog } from "./status-dialog";
@@ -21,10 +23,11 @@ export const metadata = { title: "Member" };
 export default async function MemberDetailPage({ params }: { params: { id: string } }) {
   const [staff, detail] = await Promise.all([getCurrentStaff(), getMemberDetail(params.id)]);
   if (!detail) notFound();
-  const [cases, payments, plans] = await Promise.all([
+  const [cases, payments, plans, prefix] = await Promise.all([
     getMemberCases(detail.member.id),
     listMemberPayments(detail.member.id),
     getActivePlans(),
+    getMemberIdPrefix(),
   ]);
   const { member, current } = detail;
   const isOwner = staff?.role === "Owner";
@@ -45,6 +48,10 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
         <Avatar name={member.name} size="lg" tone={member.status === "Active" ? "volt" : "soft"} />
         <div className="min-w-0 flex-1">
           <h1 className="break-words text-2xl font-bold tracking-tight text-foreground">{member.name}</h1>
+          <p className="text-sm font-semibold tabular-nums tracking-wider text-foreground">
+            <span className="sr-only">Member ID </span>
+            {formatMemberCode(prefix, member.member_code)}
+          </p>
           {anonymised ? (
             <p className="text-sm text-muted">Personal details removed on request</p>
           ) : (

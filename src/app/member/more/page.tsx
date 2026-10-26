@@ -2,6 +2,8 @@ import { Bell, History, ReceiptIndianRupee, ShieldCheck } from "lucide-react";
 import { requireMember } from "@/services/auth";
 import { getMemberProfile } from "@/services/members";
 import { getGymName } from "@/services/renewals";
+import { getMemberIdPrefix } from "@/services/settings";
+import { formatMemberCode } from "@/utils/member-code";
 import { formatPhone } from "@/utils/phone";
 import { LogoutButton } from "@/components/logout-button";
 import { Avatar } from "@/components/ui/bits";
@@ -28,7 +30,7 @@ function IconTile({ icon: Icon }: { icon: typeof History }) {
 
 export default async function MemberMorePage() {
   const { memberId } = await requireMember();
-  const [profile, gymName] = await Promise.all([getMemberProfile(memberId), getGymName()]);
+  const [profile, gymName, prefix] = await Promise.all([getMemberProfile(memberId), getGymName(), getMemberIdPrefix()]);
 
   return (
     <Page>
@@ -39,6 +41,12 @@ export default async function MemberMorePage() {
           <p className="text-sm text-muted">
             {profile ? formatPhone(profile.phone) : ""} · {gymName}
           </p>
+          {profile && (
+            <p className="text-sm font-semibold tabular-nums tracking-wider text-foreground">
+              <span className="sr-only">Member ID </span>
+              {formatMemberCode(prefix, profile.member_code)}
+            </p>
+          )}
         </div>
       </header>
 

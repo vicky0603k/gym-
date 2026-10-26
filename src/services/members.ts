@@ -9,6 +9,7 @@ import { hashPin } from "./auth";
 import { pauseMembership, resumeMembership, validationError } from "./memberships";
 import { getAttendanceHistory, getLastCheckinDate } from "./attendance";
 import { computeNewExpiry, todayKolkata } from "@/utils/dates";
+import { parseMemberCode } from "@/utils/member-code";
 import type { ActionResult } from "./payments";
 import type { Attendance, Member, MemberStatus, Membership } from "./supabase/database.types";
 
@@ -55,16 +56,17 @@ function duplicatePhone() {
 }
 
 const MEMBER_COLUMNS =
-  "id, name, phone, status, assigned_trainer_id, weekly_target, join_date, created_at, updated_at";
+  "id, member_code, name, phone, status, assigned_trainer_id, weekly_target, join_date, created_at, updated_at";
 
 export type MemberProfile = Pick<
   Member,
-  "id" | "name" | "phone" | "status" | "assigned_trainer_id" | "weekly_target" | "join_date" | "created_at" | "updated_at"
+  "id" | "member_code" | "name" | "phone" | "status" | "assigned_trainer_id" | "weekly_target" | "join_date" | "created_at" | "updated_at"
 >;
 export type MembershipWithPlan = Membership & { planName: string };
 
 export interface MemberListRow {
   id: string;
+  member_code: number;
   name: string;
   phone: string;
   status: MemberStatus;
@@ -96,11 +98,11 @@ async function currentMemberships(memberIds: string[]): Promise<Map<string, Memb
   return current;
 }
 
-/** Owner members list. Search matches name or phone. Throws on a database error. */
+/** Owner members list. Search matches name, phone or member ID. Throws on a database error. */
 export async function listMembers(filters: { search?: string; status?: string }): Promise<MemberListRow[]> {
   let query = createServiceClient()
     .from("members")
-    .select("id, name, phone, status")
+    .select("id, member_code, name, phone, status")
     .order("name", { ascending: true })
     .limit(MEMBER_LIST_LIMIT);
 
@@ -108,9 +110,11 @@ export async function listMembers(filters: { search?: string; status?: string })
   const term = (filters.search ?? "").replace(/[^\p{L}\p{N} '-]/gu, "").trim();
   if (term) {
     const digits = term.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
-    query = query.or(
-      digits.length >= 3 ? `name.ilike.%${term}%,phone.ilike.%${digits}%` : `name.ilike.%${term}%`
-    );
+    const code = parseMemberCode(term);
+    const match = [`name.ilike.%${term}%`];
+    if (digits.length >= 3) match.push(`phone.ilike.%${digits}%`);
+    if (code) match.push(`member_code.eq.${code}`);
+    query = query.or(match.join(","));
   }
   const status = MEMBER_STATUSES.find((s) => s === filters.status);
   if (status) query = query.eq("status", status);
@@ -415,6 +419,7 @@ export async function correctExpiry(memberId: string, input: unknown, staffId: s
 
 export interface MemberHome {
   name: string;
+  memberCode: number;
   membership: MembershipWithPlan | null;
 }
 
@@ -422,7 +427,7 @@ export interface MemberHome {
 export async function getMemberHome(memberId: string): Promise<MemberHome | null> {
   const { data: member, error } = await createServiceClient()
     .from("members")
-    .select("id, name")
+    .select("id, name, member_code")
     .eq("id", memberId)
     .maybeSingle();
   if (error) throw new Error("MEMBER_LOAD_FAILED");
@@ -432,6 +437,7 @@ export async function getMemberHome(memberId: string): Promise<MemberHome | null
   const m = current.get(memberId);
   return {
     name: member.name,
+    memberCode: member.member_code,
     membership: m ? { ...m, planName: names.get(m.plan_id) ?? "Membership" } : null,
   };
 }

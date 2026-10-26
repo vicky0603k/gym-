@@ -17,6 +17,7 @@ The person. One row per gym member.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
+| member_code | int UNIQUE NOT NULL | Member ID digits, random 100000–999999, given by the database on insert (`next_member_code()`), never changed or reused. Shown as `<settings.member_id_prefix>-<member_code>`, e.g. `FL-346587` (migration 013) |
 | name | text | Full name |
 | phone | text UNIQUE | Login identity, 10-digit Indian mobile (store normalised, digits only) |
 | pin_hash | text | `scrypt$<salt>$<hash>` with a per-member salt (migration 012 / C6). Older unsalted SHA-256 values still verify and are re-hashed on the member's next login |
@@ -178,6 +179,7 @@ Single-row gym configuration.
 | Column | Type | Notes |
 |---|---|---|
 | gym_name, logo_url, address, phone | text | Public page + receipts |
+| member_id_prefix | text, nullable | 2–4 capital letters in front of member IDs. Null = the gym name's initials (migration 013) |
 | timezone | text default `Asia/Kolkata` | |
 | no_show_threshold_days | int default 10 | Red List trigger |
 | qr_rotation_seconds | int default 45 | |

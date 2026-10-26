@@ -57,7 +57,15 @@ function screenFor(result: CheckInResult | "offline"): Screen {
 }
 
 /** Full-screen result: icon, one-line message, next action. */
-export function CheckInResultScreen({ result, onScanAgain }: { result: CheckInResult | "offline"; onScanAgain: () => void }) {
+export function CheckInResultScreen({
+  result,
+  memberCode,
+  onScanAgain,
+}: {
+  result: CheckInResult | "offline";
+  memberCode: string | null;
+  onScanAgain: () => void;
+}) {
   const s = screenFor(result);
   const expired = result !== "offline" && !result.ok && result.error.code === "MEMBERSHIP_EXPIRED" ? result.error : null;
 
@@ -73,6 +81,12 @@ export function CheckInResultScreen({ result, onScanAgain }: { result: CheckInRe
       )}
       <h1 className="mb-2 text-2xl font-bold text-foreground">{s.title}</h1>
       <p className="max-w-xs text-base text-muted">{s.message}</p>
+      {memberCode && (
+        <p className="mt-3 rounded-md bg-surface px-3 py-1 text-sm font-semibold tabular-nums tracking-wider text-foreground">
+          <span className="sr-only">Member ID </span>
+          {memberCode}
+        </p>
+      )}
 
       {result !== "offline" && result.ok && (
         <div className="mt-6 w-full max-w-xs card p-4 text-left">

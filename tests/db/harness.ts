@@ -46,17 +46,24 @@ export interface TestDb {
   close(): Promise<void>;
 }
 
-export async function createTestDb(): Promise<TestDb> {
+/** `seedBefore` loads the seed data before that migration, to test a migration on a gym that already has data. */
+export async function createTestDb(opts: { seedBefore?: string } = {}): Promise<TestDb> {
   const db = new PGlite();
   await db.exec(SUPABASE_STANDINS);
+  const seed = () => db.exec(fs.readFileSync(path.join(ROOT, "supabase", "seed.sql"), "utf8"));
   const dir = path.join(ROOT, "supabase", "migrations");
+  let seeded = false;
   for (const f of fs.readdirSync(dir).sort()) {
+    if (f === opts.seedBefore) {
+      await seed();
+      seeded = true;
+    }
     const sql = fs.readFileSync(path.join(dir, f), "utf8").replace(/create extension if not exists "pgcrypto";/i, "");
     await db.exec(sql).catch((e: Error) => {
       throw new Error(`${f}: ${e.message}`);
     });
   }
-  await db.exec(fs.readFileSync(path.join(ROOT, "supabase", "seed.sql"), "utf8"));
+  if (!seeded) await seed();
 
   const rows = async <T,>(sql: string, params: unknown[] = []) => (await db.query<T>(sql, params)).rows;
   const one = async <T,>(sql: string, params: unknown[] = []) => {

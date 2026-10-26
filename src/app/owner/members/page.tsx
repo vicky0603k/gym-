@@ -3,6 +3,8 @@ import { getCurrentStaff } from "@/services/auth";
 import { listMembers, MEMBER_LIST_LIMIT, MEMBER_STATUSES } from "@/services/members";
 import { formatDisplayDate, todayKolkata } from "@/utils/dates";
 import { formatPhone } from "@/utils/phone";
+import { formatMemberCode } from "@/utils/member-code";
+import { getMemberIdPrefix } from "@/services/settings";
 import { EmptyState } from "@/components/states";
 import { StatusBadge } from "@/components/status-badge";
 import { Avatar, Chips } from "@/components/ui/bits";
@@ -15,7 +17,7 @@ export const metadata = { title: "Members" };
 export default async function MembersPage({ searchParams }: { searchParams: { q?: string; status?: string } }) {
   const q = searchParams.q?.trim() ?? "";
   const status = MEMBER_STATUSES.find((s) => s === searchParams.status);
-  const [staff, members] = await Promise.all([getCurrentStaff(), listMembers({ search: q, status })]);
+  const [staff, members, prefix] = await Promise.all([getCurrentStaff(), listMembers({ search: q, status }), getMemberIdPrefix()]);
   const isOwner = staff?.role === "Owner";
   const today = todayKolkata();
   const filtered = Boolean(q || status);
@@ -52,8 +54,8 @@ export default async function MembersPage({ searchParams }: { searchParams: { q?
           name="q"
           type="search"
           defaultValue={q}
-          placeholder="Search name or mobile"
-          aria-label="Search members by name or mobile number"
+          placeholder="Search name, mobile or member ID"
+          aria-label="Search members by name, mobile number or member ID"
           className="input pl-12"
         />
         <button type="submit" className="sr-only">
@@ -99,6 +101,8 @@ export default async function MembersPage({ searchParams }: { searchParams: { q?
                   title={m.name}
                   meta={
                     <>
+                      <span className="font-semibold tabular-nums text-foreground">{formatMemberCode(prefix, m.member_code)}</span>
+                      {" · "}
                       {m.phone.startsWith("removed-") ? "Personal details removed" : formatPhone(m.phone)} · {m.planName ?? "No plan"}
                       {m.expiryDate && (
                         <span className={lapsed ? "text-danger" : undefined}>

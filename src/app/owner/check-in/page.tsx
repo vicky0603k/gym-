@@ -3,6 +3,8 @@ import { QrCode, Search, SearchX, UserSearch } from "lucide-react";
 import { listMembers } from "@/services/members";
 import { formatDisplayDate } from "@/utils/dates";
 import { formatPhone } from "@/utils/phone";
+import { formatMemberCode } from "@/utils/member-code";
+import { getMemberIdPrefix } from "@/services/settings";
 import { EmptyState } from "@/components/states";
 import { StatusBadge } from "@/components/status-badge";
 import { AssistDialog } from "./assist-dialog";
@@ -11,10 +13,11 @@ export const metadata = { title: "Assisted check-in" };
 
 const MAX_RESULTS = 20;
 
-/** Front desk: find a member by name or mobile and check them in with a reason. */
+/** Front desk: find a member by name, mobile or member ID and check them in with a reason. */
 export default async function AssistedCheckInPage({ searchParams }: { searchParams: { q?: string } }) {
   const q = searchParams.q?.trim() ?? "";
-  const members = q ? (await listMembers({ search: q })).slice(0, MAX_RESULTS) : [];
+  const [found, prefix] = await Promise.all([q ? listMembers({ search: q }) : Promise.resolve([]), getMemberIdPrefix()]);
+  const members = found.slice(0, MAX_RESULTS);
 
   return (
     <div className="mx-auto w-full px-4 pb-8 pt-4 md:px-6 md:pt-6 max-w-3xl">
@@ -32,8 +35,8 @@ export default async function AssistedCheckInPage({ searchParams }: { searchPara
           type="search"
           defaultValue={q}
           autoFocus
-          placeholder="Name or mobile number"
-          aria-label="Search members by name or mobile number"
+          placeholder="Name, mobile or member ID"
+          aria-label="Search members by name, mobile number or member ID"
           className="input"
         />
         <button type="submit" className="btn-secondary px-4" aria-label="Search">
@@ -45,7 +48,7 @@ export default async function AssistedCheckInPage({ searchParams }: { searchPara
         <EmptyState
           icon={<UserSearch className="h-10 w-10" />}
           title="Find the member"
-          message="Search by name or the last few digits of their mobile number."
+          message="Search by name, member ID or the last few digits of their mobile number."
         />
       ) : members.length === 0 ? (
         <EmptyState icon={<SearchX className="h-10 w-10" />} title="No members match" message={`No one matches “${q}”. Check the spelling or try the mobile number.`} />
@@ -58,7 +61,9 @@ export default async function AssistedCheckInPage({ searchParams }: { searchPara
                   <span className="truncate font-medium text-foreground">{m.name}</span>
                   {m.status !== "Active" && <StatusBadge status={m.status} />}
                 </p>
-                <p className="text-sm text-muted">{formatPhone(m.phone)}</p>
+                <p className="text-sm text-muted">
+                  <span className="font-semibold tabular-nums text-foreground">{formatMemberCode(prefix, m.member_code)}</span> · {formatPhone(m.phone)}
+                </p>
                 <p className="truncate text-xs text-muted">
                   {m.planName ?? "No plan"}
                   {m.expiryDate && ` · till ${formatDisplayDate(m.expiryDate)}`}

@@ -16,7 +16,7 @@ type State =
 const READER_ID = "qr-reader";
 
 /** Camera QR scanner → check-in server action → full-screen result. */
-export function Scanner() {
+export function Scanner({ memberCode }: { memberCode: string | null }) {
   const [state, setState] = useState<State>({ kind: "idle" });
   const scanner = useRef<Html5Qrcode | null>(null);
   const handled = useRef(false);
@@ -87,7 +87,7 @@ export function Scanner() {
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-8 pt-4">
       {state.kind === "result" ? (
-        <CheckInResultScreen result={state.result} onScanAgain={start} />
+        <CheckInResultScreen result={state.result} memberCode={memberCode} onScanAgain={start} />
       ) : (
         <>
           <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Check in</h1>

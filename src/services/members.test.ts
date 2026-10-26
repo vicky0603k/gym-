@@ -9,7 +9,7 @@ vi.mock("./supabase/server", () => ({
 import { createServiceClient } from "./supabase/server";
 import { hashPin } from "./auth";
 import { pauseMembership } from "./memberships";
-import { correctExpiry, createMember, createMemberSchema, pauseMember, resetMemberPin, updateMember } from "./members";
+import { correctExpiry, createMember, createMemberSchema, listMembers, pauseMember, resetMemberPin, updateMember } from "./members";
 
 // Chainable stand-in for a Supabase query: every method returns itself and
 // awaiting it resolves to `result`. Calls are recorded per table.
@@ -59,6 +59,28 @@ describe("createMemberSchema — phone format", () => {
   });
   it.each(["0", "8", "x"])("rejects weekly target %j", (weeklyTarget) => {
     expect(createMemberSchema.safeParse({ ...validMember, weeklyTarget }).success).toBe(false);
+  });
+});
+
+describe("listMembers — search", () => {
+  const orFilter = () => calls.members?.find(([m]) => m === "or")?.[1][0];
+
+  it("finds a member by their member ID", async () => {
+    results.members = [{ data: [], error: null }];
+    await listMembers({ search: "FL-346587" });
+    expect(orFilter()).toContain("member_code.eq.346587");
+  });
+
+  it("finds a member by the 6 digits alone", async () => {
+    results.members = [{ data: [], error: null }];
+    await listMembers({ search: "346587" });
+    expect(orFilter()).toContain("member_code.eq.346587");
+  });
+
+  it("does not search member IDs for a name", async () => {
+    results.members = [{ data: [], error: null }];
+    await listMembers({ search: "Neha" });
+    expect(orFilter()).not.toContain("member_code");
   });
 });
 

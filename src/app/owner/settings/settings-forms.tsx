@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FormError, FormField } from "@/components/form-field";
 import type { GymSettings } from "@/services/settings";
+import { gymInitials } from "@/utils/member-code";
 import type { ActionResult } from "@/services/payments";
 import { updateGymProfileAction, updateRulesAction } from "./actions";
 
@@ -67,6 +68,13 @@ export function GymProfileForm({ s }: { s: GymSettings }) {
         {text("upiId", "UPI ID for payments", s.upi_id, { autoComplete: "off", placeholder: "gymname@okicici" })}
         {text("upiName", "UPI payee name (optional)", s.upi_name, { maxLength: 60 })}
       </div>
+      {text(
+        "memberIdPrefix",
+        "Member ID letters",
+        s.member_id_prefix,
+        { autoComplete: "off", maxLength: 4, placeholder: gymInitials(s.gym_name), className: "input max-w-[8rem] uppercase" },
+        `2 to 4 letters shown in front of every member ID, e.g. ${gymInitials(s.gym_name)}-346587. Leave blank to use your gym's initials. Changing them updates every member's ID.`
+      )}
       {text("gstin", "GSTIN (only if GST-registered)", s.gstin, { autoComplete: "off", maxLength: 15, placeholder: "29ABCDE1234F1Z5" }, "When filled, receipts show the GSTIN and the 18% GST included in the price")}
       <FormError message={message} />
       <Submit pending={pending} />

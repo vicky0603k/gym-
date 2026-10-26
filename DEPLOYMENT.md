@@ -11,7 +11,7 @@ How the app is deployed for the pilot, and how updates are shipped. Stack: Verce
 ## 2. Supabase setup (production)
 
 1. Create the project; note the project URL and keys.
-2. In the SQL editor (or via the Supabase CLI), run **every** migration in order, one file at a time: `001_tables.sql` … `012_desk_refund_freeze_staff.sql`. Run each file once; a second run fails with "already exists" and changes nothing.
+2. In the SQL editor (or via the Supabase CLI), run **every** migration in order, one file at a time: `001_tables.sql` … `013_member_code.sql`. Run each file once; a second run fails with "already exists" and changes nothing.
 3. **Do not run `seed.sql` in production**, except: create the real owner account (Supabase Auth user + `staff_users` row) and the gym's real `settings` row and plans.
 4. Confirm RLS is enabled on every table (Table Editor → table → RLS) and run the member-isolation check from `TESTING.md` against a test member before real members are imported.
 5. Import the gym's real members only after the owner has verified the list (count must match the gym's source record — register/app export): `node scripts/import-members.mjs members.csv` (dry run), then `--commit`. The PIN list it writes to `private/` is for handing PINs over in person — never share or commit it.

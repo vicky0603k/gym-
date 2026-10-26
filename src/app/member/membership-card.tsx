@@ -8,7 +8,7 @@ import { daysUntilKolkata, formatDisplayDate } from "@/utils/dates";
  * black card, gym and plan on top, the expiry date large in condensed volt, days left below.
  * Warning/danger on black are solid pills with white text — tinted text would fail contrast.
  */
-export function MembershipCard({ gymName, membership }: { gymName: string; membership: MembershipWithPlan }) {
+export function MembershipCard({ gymName, memberId, membership }: { gymName: string; memberId: string; membership: MembershipWithPlan }) {
   const daysLeft = daysUntilKolkata(membership.expiry_date);
   const expired = daysLeft < 0;
   const paused = membership.status === "Frozen";
@@ -41,6 +41,11 @@ export function MembershipCard({ gymName, membership }: { gymName: string; membe
           <span className="text-sm text-background/70">{note}</span>
         )}
       </div>
+
+      <p className="mt-5 flex items-center justify-between gap-3 border-t border-background/15 pt-3 text-sm">
+        <span className="text-background/70">Member ID</span>
+        <span className="font-semibold tabular-nums tracking-wider">{memberId}</span>
+      </p>
     </Card>
   );
 }

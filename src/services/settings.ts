@@ -7,6 +7,7 @@ import { z } from "zod";
 import { createServiceClient } from "./supabase/server";
 import { validationError } from "./memberships";
 import { DEFAULT_NO_SHOW_THRESHOLD_DAYS, DEFAULT_WEEKLY_TARGET, RENEWAL_WINDOWS } from "@/utils/constants";
+import { memberIdPrefix } from "@/utils/member-code";
 import type { ActionResult } from "./payments";
 import type { Settings } from "./supabase/database.types";
 
@@ -65,6 +66,7 @@ export type GymSettings = Pick<
   Settings,
   | "gym_name" | "tagline" | "address" | "maps_url" | "phone" | "opening_hours" | "upi_id" | "upi_name"
   | "no_show_threshold_days" | "renewal_windows" | "weekly_goal_default" | "freeze_max_days_per_year" | "gstin"
+  | "member_id_prefix"
 >;
 
 const DEFAULTS: GymSettings = {
@@ -81,13 +83,19 @@ const DEFAULTS: GymSettings = {
   weekly_goal_default: DEFAULT_WEEKLY_TARGET,
   freeze_max_days_per_year: 30,
   gstin: null,
+  member_id_prefix: null,
 };
+
+/** Letters shown in front of member IDs (FL-346587). Throws on a database error. */
+export async function getMemberIdPrefix(): Promise<string> {
+  return memberIdPrefix(await getSettings());
+}
 
 /** The single settings row, with defaults when it hasn't been created yet. Throws on a database error. */
 export async function getSettings(): Promise<GymSettings> {
   const { data, error } = await createServiceClient()
     .from("settings")
-    .select("gym_name, tagline, address, maps_url, phone, opening_hours, upi_id, upi_name, no_show_threshold_days, renewal_windows, weekly_goal_default, freeze_max_days_per_year, gstin")
+    .select("gym_name, tagline, address, maps_url, phone, opening_hours, upi_id, upi_name, no_show_threshold_days, renewal_windows, weekly_goal_default, freeze_max_days_per_year, gstin, member_id_prefix")
     .limit(1)
     .maybeSingle();
   if (error) throw new Error("SETTINGS_LOAD_FAILED");
@@ -128,6 +136,13 @@ export const gymProfileSchema = z.object({
     .optional()
     .transform((v) => (v ? v.toUpperCase() : null))
     .refine((v) => v === null || /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v), "Enter the 15-character GSTIN, e.g. 29ABCDE1234F1Z5"),
+  // Letters in front of every member ID (FL-346587). Blank = the gym's initials.
+  memberIdPrefix: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? v.toUpperCase() : null))
+    .refine((v) => v === null || /^[A-Z]{2,4}$/.test(v), "Use 2 to 4 letters, e.g. FL"),
 });
 
 export const rulesSchema = z.object({
@@ -186,6 +201,7 @@ export async function updateGymProfile(input: unknown, staffId: string): Promise
       upi_id: v.upiId,
       upi_name: v.upiName,
       gstin: v.gstin,
+      member_id_prefix: v.memberIdPrefix,
     },
     staffId,
     `Gym profile updated: ${v.gymName}${v.upiId ? `, UPI ${v.upiId}` : ", no UPI ID"}.`

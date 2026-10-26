@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ChevronRight, CreditCard, History, IdCard, ReceiptIndianRupee, ScanLine, ShoppingBag } from "lucide-react";
 import { requireMember } from "@/services/auth";
 import { getMemberHome } from "@/services/members";
+import { getMemberIdPrefix } from "@/services/settings";
+import { formatMemberCode } from "@/utils/member-code";
 import { getWeeklyGoalState } from "@/services/streak";
 import { getGymName } from "@/services/renewals";
 import { listAddons } from "@/services/addons";
@@ -27,15 +29,17 @@ export const dynamic = "force-dynamic";
  */
 export default async function MemberHomePage() {
   const { memberId } = await requireMember();
-  const [home, goal, gymName, addons, visits] = await Promise.all([
+  const [home, goal, gymName, addons, visits, prefix] = await Promise.all([
     getMemberHome(memberId),
     getWeeklyGoalState(memberId),
     getGymName(),
     listAddons(),
     getAttendanceHistory(memberId, 0, 3),
+    getMemberIdPrefix(),
   ]);
   const membership = home?.membership ?? null;
   const name = home?.name ?? "";
+  const memberCode = home ? formatMemberCode(prefix, home.memberCode) : "";
 
   const header = (
     <header className="mb-4 flex items-center justify-between gap-3">
@@ -69,7 +73,7 @@ export default async function MemberHomePage() {
   return (
     <Page>
       {header}
-      <MembershipCard gymName={gymName} membership={membership} />
+      <MembershipCard gymName={gymName} memberId={memberCode} membership={membership} />
 
       {membership.status !== "Frozen" && daysLeft <= 7 && (
         <Link href="/member/renew" className="mt-3 flex min-h-[64px] items-center gap-3 rounded-lg border-2 border-warning bg-background p-4">

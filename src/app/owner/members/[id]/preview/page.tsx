@@ -7,6 +7,8 @@ import { getWeeklyGoalState } from "@/services/streak";
 import { listMemberPayments } from "@/services/payments";
 import { paymentLabel } from "@/services/payment-labels";
 import { getGymName } from "@/services/renewals";
+import { getMemberIdPrefix } from "@/services/settings";
+import { formatMemberCode } from "@/utils/member-code";
 import { formatDisplayDate, formatDisplayTime, toKolkataDateString } from "@/utils/dates";
 import { formatRupees } from "@/utils/money";
 import { StatusBadge } from "@/components/status-badge";
@@ -28,10 +30,11 @@ export default async function MemberPreviewPage({ params }: { params: { id: stri
   if (staff?.role !== "Owner") redirect(`/owner/members/${params.id}`);
   const detail = await getMemberDetail(params.id);
   if (!detail) notFound();
-  const [goal, payments, gymName] = await Promise.all([
+  const [goal, payments, gymName, prefix] = await Promise.all([
     getWeeklyGoalState(detail.member.id),
     listMemberPayments(detail.member.id),
     getGymName(),
+    getMemberIdPrefix(),
     logMemberPreview(detail.member.id, staff.id),
   ]);
   const { member, current } = detail;
@@ -54,7 +57,7 @@ export default async function MemberPreviewPage({ params }: { params: { id: stri
       </header>
 
       {current ? (
-        <MembershipCard gymName={gymName} membership={current} />
+        <MembershipCard gymName={gymName} memberId={formatMemberCode(prefix, member.member_code)} membership={current} />
       ) : (
         <p className="rounded-lg bg-surface p-5 text-sm text-muted">No membership on file.</p>
       )}

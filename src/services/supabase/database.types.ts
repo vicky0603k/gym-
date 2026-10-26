@@ -82,6 +82,7 @@ export type Member = {
   pin_locked_until: string | null;
   notify_renewal: boolean; // 010
   notify_care: boolean; // 010
+  member_code: number; // 013 — unique 6 digits, shown as e.g. FL-346587
   created_at: string;
   updated_at: string;
 };
@@ -266,6 +267,7 @@ export type Settings = {
   tagline: string | null;
   freeze_max_days_per_year: number; // 012
   gstin: string | null;
+  member_id_prefix: string | null; // 013
   created_at: string;
   updated_at: string;
 };
@@ -383,7 +385,7 @@ export type Database = {
         Row: Member;
         Insert: Omit<
           Member,
-          "id" | "created_at" | "updated_at" | "pin_hash" | "assigned_trainer_id" | "notes" | "status" | "weekly_target" | "join_date" | "marketing_consent" | "pin_failed_attempts" | "pin_locked_until" | "notify_renewal" | "notify_care"
+          "id" | "created_at" | "updated_at" | "pin_hash" | "assigned_trainer_id" | "notes" | "status" | "weekly_target" | "join_date" | "marketing_consent" | "pin_failed_attempts" | "pin_locked_until" | "notify_renewal" | "notify_care" | "member_code"
         > & {
           id?: string;
           pin_hash?: string;
@@ -565,8 +567,9 @@ export type Database = {
         Row: Settings;
         Insert: Omit<
           Settings,
-          "id" | "created_at" | "updated_at" | "logo_url" | "address" | "phone" | "gym_name" | "timezone" | "no_show_threshold_days" | "qr_rotation_seconds" | "duplicate_window_hours" | "renewal_windows" | "weekly_goal_default" | "opening_hours" | "maps_url" | "upi_id" | "upi_name" | "tagline" | "freeze_max_days_per_year" | "gstin"
+          "id" | "created_at" | "updated_at" | "logo_url" | "address" | "phone" | "gym_name" | "timezone" | "no_show_threshold_days" | "qr_rotation_seconds" | "duplicate_window_hours" | "renewal_windows" | "weekly_goal_default" | "opening_hours" | "maps_url" | "upi_id" | "upi_name" | "tagline" | "freeze_max_days_per_year" | "gstin" | "member_id_prefix"
         > & {
+          member_id_prefix?: string | null;
           freeze_max_days_per_year?: number;
           gstin?: string | null;
           id?: string;

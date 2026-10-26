@@ -41,6 +41,22 @@ describe("gymProfileSchema", () => {
   });
 });
 
+describe("gymProfileSchema — member ID letters", () => {
+  it("upper-cases the letters", () => {
+    expect(gymProfileSchema.parse({ ...profile, memberIdPrefix: "fl" }).memberIdPrefix).toBe("FL");
+  });
+
+  it("treats blank as 'use the gym's initials'", () => {
+    expect(gymProfileSchema.parse({ ...profile, memberIdPrefix: "" }).memberIdPrefix).toBeNull();
+  });
+
+  it.each(["F", "FLXYZ", "F1", "F-L"])("rejects %j", (memberIdPrefix) => {
+    const result = gymProfileSchema.safeParse({ ...profile, memberIdPrefix });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues[0].message).toBe("Use 2 to 4 letters, e.g. FL");
+  });
+});
+
 describe("rulesSchema", () => {
   it("parses, de-duplicates and sorts renewal windows", () => {
     expect(rulesSchema.parse({ noShowThresholdDays: "10", renewalWindows: "0, 7, 14 3,-3, 7", freezeMaxDaysPerYear: "30" })).toEqual({
