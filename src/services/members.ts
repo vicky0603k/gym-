@@ -528,3 +528,15 @@ export async function anonymiseMember(memberId: string, staffId: string): Promis
   }
   return { ok: true, data: undefined };
 }
+
+/** An owner opened a member's app in read-only preview: record who looked, and when (SECURITY.md §5). */
+export async function logMemberPreview(memberId: string, staffId: string): Promise<void> {
+  await createServiceClient().from("audit_logs").insert({
+    actor_type: "Staff",
+    actor_id: staffId,
+    action: "member.previewed",
+    record_type: "member",
+    record_id: memberId,
+    summary: "Member app viewed read-only by staff.",
+  });
+}

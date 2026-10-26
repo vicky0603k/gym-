@@ -1,18 +1,20 @@
 import Link from "next/link";
-import { ChevronRight, CreditCard, IdCard, ScanLine } from "lucide-react";
+import { ChevronRight, CreditCard, History, IdCard, ReceiptIndianRupee, ScanLine, ShoppingBag } from "lucide-react";
 import { requireMember } from "@/services/auth";
 import { getMemberHome } from "@/services/members";
 import { getWeeklyGoalState } from "@/services/streak";
 import { getGymName } from "@/services/renewals";
 import { listAddons } from "@/services/addons";
-import { daysUntilKolkata, greetingKolkata } from "@/utils/dates";
+import { getAttendanceHistory } from "@/services/attendance";
+import { daysUntilKolkata, formatDisplayDate, formatDisplayTime, greetingKolkata, toKolkataDateString } from "@/utils/dates";
 import { formatRupees } from "@/utils/money";
 import { EmptyState } from "@/components/states";
-import { Avatar } from "@/components/ui/bits";
+import { Avatar, QuickActions } from "@/components/ui/bits";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Page } from "@/components/ui/page";
+import { Page, Section } from "@/components/ui/page";
+import { List, ListRow } from "@/components/ui/list";
 import { WeeklyGoalCard } from "./weekly-goal-card";
 import { MembershipCard } from "./membership-card";
 
@@ -25,11 +27,12 @@ export const dynamic = "force-dynamic";
  */
 export default async function MemberHomePage() {
   const { memberId } = await requireMember();
-  const [home, goal, gymName, addons] = await Promise.all([
+  const [home, goal, gymName, addons, visits] = await Promise.all([
     getMemberHome(memberId),
     getWeeklyGoalState(memberId),
     getGymName(),
     listAddons(),
+    getAttendanceHistory(memberId, 0, 3),
   ]);
   const membership = home?.membership ?? null;
   const name = home?.name ?? "";
@@ -87,6 +90,17 @@ export default async function MemberHomePage() {
         <ScanLine className="h-5 w-5" aria-hidden /> Scan to check in
       </ButtonLink>
 
+      <QuickActions
+        className="mt-3"
+        label="Shortcuts"
+        items={[
+          { href: "/member/renew", label: "Renew", icon: CreditCard },
+          { href: "/member/add-ons", label: "Add-ons", icon: ShoppingBag },
+          { href: "/member/attendance", label: "My visits", icon: History },
+          { href: "/member/payments", label: "Receipts", icon: ReceiptIndianRupee },
+        ]}
+      />
+
       {featured && (
         <Link href="/member/add-ons" className="mt-3 block">
           <Card className="flex items-center justify-between gap-3 transition-colors hover:bg-surface-2" as="div">
@@ -108,6 +122,21 @@ export default async function MemberHomePage() {
             <p className="num-display shrink-0 text-2xl text-foreground">{formatRupees(featured.price)}</p>
           </Card>
         </Link>
+      )}
+
+      {visits.length > 0 && (
+        <Section title="Recent visits" link={{ href: "/member/attendance", label: "All" }}>
+          <List>
+            {visits.slice(0, 3).map((v) => (
+              <ListRow
+                key={v.id}
+                title={formatDisplayDate(toKolkataDateString(v.checkin_at))}
+                meta={formatDisplayTime(v.checkin_at)}
+                trailing={<span className="text-sm text-muted">{v.source === "QR" ? "QR scan" : "Front desk"}</span>}
+              />
+            ))}
+          </List>
+        </Section>
       )}
     </Page>
   );

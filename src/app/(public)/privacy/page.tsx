@@ -24,7 +24,7 @@ export default async function PrivacyPage() {
 
   return (
     <main className="mx-auto max-w-2xl space-y-8 px-6 py-10">
-      <Link href="/" className="inline-flex min-h-[48px] items-center gap-1 text-sm text-muted hover:text-foreground">
+      <Link href="/gym" className="inline-flex min-h-[48px] items-center gap-1 text-sm text-muted hover:text-foreground">
         <ArrowLeft className="h-4 w-4" aria-hidden /> {gym}
       </Link>
       <div>

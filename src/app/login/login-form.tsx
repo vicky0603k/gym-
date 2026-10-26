@@ -121,8 +121,8 @@ export function LoginForm({ gymName }: { gymName: string }) {
         )}
 
         <div className="mt-8 flex justify-center gap-6 pb-8 text-sm">
-          <Link href="/" className="text-muted hover:text-foreground transition-colors">
-            ← Back to home
+          <Link href="/gym" className="text-muted hover:text-foreground transition-colors">
+            Gym plans &amp; timings
           </Link>
           <Link href="/privacy" className="text-muted hover:text-foreground transition-colors">
             Privacy

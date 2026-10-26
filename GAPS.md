@@ -50,7 +50,7 @@ Bugs found and fixed while testing: offline page was never cached (no offline sc
 |---|---|---|---|
 | B1 | **Deploy to Vercel** | The app must be on the internet for phones | Create a Vercel account (free) and connect this GitHub repo, *or* run `npx vercel login` once in your own terminal. Then I set it up and run the `DEPLOYMENT.md` §4 smoke tests. Production env vars must use **new** `QR_TOKEN_SECRET` and `CRON_SECRET` (I'll give the command to generate them yourself). |
 | B2 | **Real phone test** | Install prompt, real camera, WhatsApp links | 15 minutes with an Android phone (Chrome) on the deployed link; an iPhone too if you have one. I'll send a checklist. |
-| B3 | **Production Supabase project** | Test and real data must be separate | A second Supabase project (same steps as before, Asia-Pacific). Run migrations `001`–`012` only — **never `seed.sql`**. Create the real owner login. |
+| B3 | **Production Supabase project** | Test and real data must be separate | A second Supabase project (same steps as before, Asia-Pacific). Run migrations `001`–`012` only — **never `seed.sql`**. Create the real owner login. The `superadmin@gmail.com` login and the e2e logins exist on the **test** project only — never recreate them in production with the same password. |
 | B4 | **Gym material** | The website and receipts show it | Logo (1024×1024) + 4–8 photos; trainer names/specialities with consent; final plans and prices in writing; UPI ID + payee name; GSTIN if registered; opening hours; Google Maps link. |
 | B5 | **Member list** | For the import script | Excel/CSV: name, phone, plan, expiry date (and start date if known). |
 | B6 | **Legal** | DPDP Act 2023, sales | A lawyer reads `/privacy` and the sales agreement (fees, pilot terms, data ownership, support hours, liability). |
@@ -64,6 +64,12 @@ Bugs found and fixed while testing: offline page was never cached (no offline sc
 | D1 | Custom domain (e.g. `app.<gymname>.in`) | Yes before charging — about ₹800/year; I configure it once B1 is done. |
 | D2 | Replace test data on this test project | Keep it for testing. It now holds e2e test members (names start with "E2E", "Live Test", "Import Test") — harmless, never copied to production. |
 | D3 | **Upgrade Next.js 14 → 15** | Recommended within the first month. Next 14.2.35 (now installed) fixes the critical issues for 14.x, and the unused image endpoint is switched off, but some advisories are fixed only in 15.5+. It is a framework upgrade (1–2 days, full retest with the suites above), so it needs your OK. zod 4 can go with it. |
+
+## App structure (26 Oct 2026)
+
+- `/` opens the login; a signed-in member goes to `/member`, staff to `/owner`. The gym's public website is at `/gym` (linked from login).
+- Owners can open any member's app read-only from the member page (**View member app**); every view is written to the audit log (`member.previewed`).
+- Both dashboards start with one-tap shortcuts (mobile first); the owner dashboard uses two columns on desktop.
 
 ## Not needed for one gym
 

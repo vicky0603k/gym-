@@ -57,7 +57,7 @@ test.afterAll(async () => {
 
 test("public website and privacy notice", async ({ page }) => {
   const errs = watchErrors(page);
-  await page.goto("/");
+  await page.goto("/gym");
   await expect(page.getByRole("heading", { name: "Membership plans" })).toBeVisible();
   await expect(page.getByText("+91 +91")).toHaveCount(0);
   await shot(page, "01-landing");
@@ -90,6 +90,28 @@ test("owner creates a plan and adds a member; expiry shown as d MMM yyyy", async
   await expect(owner.getByRole("heading", { name: MEMBER })).toBeVisible();
   await expect(owner.getByText(displayDate(60)).first()).toBeVisible();
   await shot(owner, "04-member-detail");
+});
+
+test("the app opens on login; the gym website lives at /gym", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL("**/login");
+  await expect(page.getByRole("button", { name: "Member", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: /Gym plans/ }).click();
+  await page.waitForURL("**/gym");
+  await expect(page.getByRole("heading", { name: "Membership plans" })).toBeVisible();
+});
+
+test("owner opens the member's app read-only from the member page, and it is audited", async () => {
+  await owner.goto(`/owner/members/${memberId}`);
+  await owner.getByRole("link", { name: "View member app" }).click();
+  await owner.waitForURL(`**/owner/members/${memberId}/preview`);
+  await expect(owner.getByText(/read only/)).toBeVisible();
+  await expect(owner.getByText(displayDate(60)).first()).toBeVisible();
+  await expect(owner.getByRole("link", { name: /Scan to check in/ })).toHaveCount(0);
+  await expect(owner.locator("main").getByRole("button")).toHaveCount(0);
+  await shot(owner, "04b-member-preview");
+  const { count } = await admin().from("audit_logs").select("id", { count: "exact", head: true }).eq("action", "member.previewed").eq("record_id", memberId);
+  expect(count).toBeGreaterThan(0);
 });
 
 test("member logs in with phone + PIN and sees the same plan and expiry", async () => {

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Pencil, Phone } from "lucide-react";
+import { ArrowLeft, Eye, Pencil, Phone } from "lucide-react";
 import { getCurrentStaff } from "@/services/auth";
 import { getMemberDetail } from "@/services/members";
 import { getMemberCases } from "@/services/red-list";
@@ -71,6 +71,11 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
         <BackfillVisitDialog memberId={member.id} memberName={member.name} today={todayKolkata()} />
         {isOwner && !anonymised && <MemberStatusDialog memberId={member.id} memberName={member.name} status={member.status} />}
         {isOwner && member.status === "Cancelled" && !anonymised && <AnonymiseDialog memberId={member.id} memberName={member.name} />}
+        {isOwner && !anonymised && (
+          <Link href={`/owner/members/${member.id}/preview`} className="btn-secondary px-3 whitespace-nowrap">
+            <Eye className="h-4 w-4" aria-hidden /> View member app
+          </Link>
+        )}
       </div>
 
       <CurrentMembership membership={current} />

@@ -112,3 +112,39 @@ export function Chips({ items, label }: { items: { href: string; label: string; 
     </nav>
   );
 }
+
+export type QuickActionItem = { href: string; label: string; icon: LucideIcon; badge?: number; primary?: boolean };
+
+/**
+ * One-tap shortcuts at the top of a dashboard (mobile first): icon tile + short label,
+ * an optional count badge. `primary` makes the tile volt — use it for the single main job.
+ */
+export function QuickActions({ items, label, className }: { items: QuickActionItem[]; label: string; className?: string }) {
+  return (
+    <nav aria-label={label} className={cn("-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0", className)}>
+      {/* Up to four fit a phone row exactly; more scroll sideways. */}
+      <ul className={cn("gap-2 md:grid md:grid-cols-[repeat(auto-fill,minmax(110px,1fr))]", items.length <= 4 ? "grid grid-cols-4" : "flex")}>
+        {items.map((a) => (
+          <li key={a.href} className={cn("md:w-auto", items.length > 4 && "w-[84px] shrink-0")}>
+            <Link
+              href={a.href}
+              className={cn(
+                "relative flex h-[88px] flex-col items-center justify-center gap-2 rounded-lg px-1 text-center transition-[transform,background-color] active:scale-95",
+                a.primary ? "bg-accent text-accent-foreground hover:bg-accent-muted" : "bg-surface text-foreground hover:bg-surface-2"
+              )}
+            >
+              <a.icon className="h-6 w-6" aria-hidden />
+              <span className="text-xs font-semibold leading-tight">{a.label}</span>
+              {a.badge ? (
+                <span className="absolute right-1.5 top-1.5 min-w-[20px] rounded-full bg-danger px-1.5 text-center text-xs font-bold leading-5 text-background">
+                  {a.badge}
+                  <span className="sr-only"> waiting</span>
+                </span>
+              ) : null}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
