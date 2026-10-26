@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -13,7 +13,8 @@
     "type-check": "tsc --noEmit",
     "import:members": "node scripts/import-members.mjs",
     "backup": "node scripts/backup.mjs",
-    "test:live": "vitest run --config vitest.live.config.ts"
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "dev:webpack": "next dev"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

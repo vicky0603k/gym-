@@ -13,6 +13,7 @@
  */
 import { z } from "zod";
 import { createServiceClient } from "./supabase/server";
+import { getSettings } from "./settings";
 import { validationError } from "./memberships";
 import { addDaysToDate, formatDisplayDate, todayKolkata } from "@/utils/dates";
 import type { ActionResult } from "./payments";
@@ -190,6 +191,6 @@ export function whatsAppLink(phone: string, text: string): string {
 
 /** Gym phone for the WhatsApp support link (settings.phone). Null when not set. */
 export async function getGymPhone(): Promise<string | null> {
-  const { data } = await createServiceClient().from("settings").select("phone").limit(1).maybeSingle();
+  const data = await getSettings().catch(() => null);
   return data?.phone?.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "") || null;
 }

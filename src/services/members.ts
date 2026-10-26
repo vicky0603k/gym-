@@ -80,21 +80,21 @@ async function planNames(): Promise<Map<string, string>> {
   return new Map(data.map((p) => [p.id, p.name]));
 }
 
-/** Latest non-cancelled membership per member (the one the owner and member care about). */
-async function currentMemberships(memberIds: string[]): Promise<Map<string, Membership>> {
-  const supabase = createServiceClient();
-  const current = new Map<string, Membership>();
-  // Chunked so the id list never overflows the request URL.
-  for (let i = 0; i < memberIds.length; i += 100) {
-    const { data, error } = await supabase
-      .from("memberships")
-      .select("*")
-      .in("member_id", memberIds.slice(i, i + 100))
-      .neq("status", "Cancelled")
-      .order("expiry_date", { ascending: false });
-    if (error) throw new Error("MEMBERSHIPS_LOAD_FAILED");
-    for (const m of data) if (!current.has(m.member_id)) current.set(m.member_id, m);
-  }
+/**
+ * Latest non-cancelled membership per member (the one the owner and member care about),
+ * for the whole gym in one query so it runs alongside the members query, not after it.
+ * shortcut: reads every running membership; fine for one gym's few thousand rows, add paging past ~5,000.
+ */
+async function currentMemberships(): Promise<Map<string, Pick<Membership, "member_id" | "plan_id" | "expiry_date">>> {
+  const { data, error } = await createServiceClient()
+    .from("memberships")
+    .select("member_id, plan_id, expiry_date")
+    .neq("status", "Cancelled")
+    .order("expiry_date", { ascending: false })
+    .limit(10000);
+  if (error) throw new Error("MEMBERSHIPS_LOAD_FAILED");
+  const current = new Map<string, Pick<Membership, "member_id" | "plan_id" | "expiry_date">>();
+  for (const m of data) if (!current.has(m.member_id)) current.set(m.member_id, m);
   return current;
 }
 
@@ -119,11 +119,11 @@ export async function listMembers(filters: { search?: string; status?: string })
   const status = MEMBER_STATUSES.find((s) => s === filters.status);
   if (status) query = query.eq("status", status);
 
-  const { data: members, error } = await query;
+  // One parallel round: members, plan names and running memberships together.
+  const [{ data: members, error }, names, current] = await Promise.all([query, planNames(), currentMemberships()]);
   if (error) throw new Error("MEMBERS_LOAD_FAILED");
   if (!members.length) return [];
 
-  const [names, current] = await Promise.all([planNames(), currentMemberships(members.map((m) => m.id))]);
   return members.map((m) => {
     const ms = current.get(m.id);
     return {
@@ -425,16 +425,16 @@ export interface MemberHome {
 
 /** The signed-in member's own card: real plan name and exact expiry. */
 export async function getMemberHome(memberId: string): Promise<MemberHome | null> {
-  const { data: member, error } = await createServiceClient()
-    .from("members")
-    .select("id, name, member_code")
-    .eq("id", memberId)
-    .maybeSingle();
-  if (error) throw new Error("MEMBER_LOAD_FAILED");
+  const supabase = createServiceClient();
+  // Member, plan names and the latest non-cancelled membership in one parallel round.
+  const [{ data: member, error }, names, latest] = await Promise.all([
+    supabase.from("members").select("id, name, member_code").eq("id", memberId).maybeSingle(),
+    planNames(),
+    supabase.from("memberships").select("*").eq("member_id", memberId).neq("status", "Cancelled").order("expiry_date", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  if (error || latest.error) throw new Error("MEMBER_LOAD_FAILED");
   if (!member) return null;
-
-  const [names, current] = await Promise.all([planNames(), currentMemberships([memberId])]);
-  const m = current.get(memberId);
+  const m = latest.data;
   return {
     name: member.name,
     memberCode: member.member_code,

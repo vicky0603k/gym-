@@ -27,10 +27,10 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh the session if it has expired
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Refreshes an expired session and verifies the JWT locally against the project's
+  // signing keys (getClaims) — no Auth round trip on every navigation.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   const { pathname } = request.nextUrl;
 

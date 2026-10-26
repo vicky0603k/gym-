@@ -113,20 +113,16 @@ async function withOrders(payments: Payment[]): Promise<PaymentDetail[]> {
   const renewalIds = ids("Renewal");
   const addonIds = ids("AddOn");
 
-  const [renewalOrders, addonOrders, members] = await Promise.all([
+  // One parallel round. Plans and add-ons are small catalogue tables, so they are read
+  // whole instead of waiting for the orders to know which ids are needed.
+  const [renewalOrders, addonOrders, members, plans, addons] = await Promise.all([
     renewalIds.length ? supabase.from("renewal_orders").select("*").in("payment_id", renewalIds) : NONE,
     addonIds.length ? supabase.from("addon_orders").select("*").in("payment_id", addonIds) : NONE,
     supabase.from("members").select("id, name, phone").in("id", [...new Set(payments.map((p) => p.member_id))]),
+    renewalIds.length ? supabase.from("plans").select("id, name, duration_days") : NONE,
+    addonIds.length ? supabase.from("addons").select("id, title, type, validity_days") : NONE,
   ]);
-  if (renewalOrders.error || addonOrders.error || members.error) throw new Error("PAYMENTS_LOAD_FAILED");
-
-  const planIds = [...new Set(renewalOrders.data.map((o) => o.plan_id))];
-  const addonItemIds = [...new Set(addonOrders.data.map((o) => o.addon_id))];
-  const [plans, addons] = await Promise.all([
-    planIds.length ? supabase.from("plans").select("id, name, duration_days").in("id", planIds) : NONE,
-    addonItemIds.length ? supabase.from("addons").select("id, title, type, validity_days").in("id", addonItemIds) : NONE,
-  ]);
-  if (plans.error || addons.error) throw new Error("PAYMENTS_LOAD_FAILED");
+  if (renewalOrders.error || addonOrders.error || members.error || plans.error || addons.error) throw new Error("PAYMENTS_LOAD_FAILED");
 
   return payments.flatMap((p): PaymentDetail[] => {
     const member = members.data.find((m) => m.id === p.member_id);

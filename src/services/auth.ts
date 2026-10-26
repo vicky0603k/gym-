@@ -3,6 +3,8 @@
  * All functions run server-side only.
  */
 import { createHash, randomBytes, scryptSync } from "node:crypto";
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { z } from "zod";
 import { createServerClient, createServiceClient } from "./supabase/server";
 import type { StaffUser } from "./supabase/database.types";
@@ -130,22 +132,35 @@ export interface CurrentMember {
 }
 
 /**
- * Returns the currently authenticated staff user, or null.
- * Reads the Supabase Auth session from the cookie.
+ * The signed-in user's verified JWT claims, or null. getClaims() checks the token's
+ * signature locally against the project's ES256 keys — no Auth round trip per page
+ * (getUser() cost one). Cached per request so layout, page and metadata share it.
  */
-export async function getCurrentStaff(): Promise<CurrentStaff | null> {
+const sessionClaims = cache(async () => {
   const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  return data?.claims ?? null;
+});
 
-  if (!user) return null;
+// The staff row for a verified user id, from Next's data cache: one database round trip
+// saved on every staff page. Removing access drops this cache at once (staff.ts),
+// and it never lives longer than a minute.
+export const STAFF_TAG = "staff";
+const staffRow = unstable_cache(
+  async (id: string) => (await createServiceClient().from("staff_users").select("*").eq("id", id).maybeSingle()).data,
+  ["staff-row"],
+  { tags: [STAFF_TAG], revalidate: 60 }
+);
 
-  const { data: staff } = await supabase
-    .from("staff_users")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+/**
+ * Returns the currently authenticated staff user, or null.
+ * Reads the Supabase Auth session from the cookie. Cached per request.
+ */
+export const getCurrentStaff = cache(async (): Promise<CurrentStaff | null> => {
+  const claims = await sessionClaims();
+  if (!claims?.sub) return null;
+
+  const staff = await staffRow(claims.sub);
 
   // A removed staff member (C1) is treated as logged out.
   if (!staff || !staff.is_active) return null;
@@ -157,9 +172,9 @@ export async function getCurrentStaff(): Promise<CurrentStaff | null> {
     is_active: staff.is_active,
     created_at: staff.created_at,
     updated_at: staff.updated_at,
-    email: user.email ?? "",
+    email: claims.email ?? "",
   };
-}
+});
 
 /**
  * Asserts the current user is a staff member.
@@ -189,18 +204,9 @@ export async function requireOwner(): Promise<CurrentStaff> {
  * Read from app_metadata (server-set only) — never user_metadata, which the user can edit.
  */
 export async function getCurrentMemberId(): Promise<string | null> {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
-  const memberId =
-    (user.app_metadata as Record<string, unknown>)?.member_id as
-      | string
-      | undefined;
-  return memberId ?? null;
+  const claims = await sessionClaims();
+  const memberId = (claims?.app_metadata as Record<string, unknown> | undefined)?.member_id;
+  return typeof memberId === "string" ? memberId : null;
 }
 
 /**

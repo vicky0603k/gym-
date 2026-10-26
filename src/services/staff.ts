@@ -4,7 +4,9 @@
  * Staff are never deleted (payments and visits point at them): removing
  * access sets is_active = false and bans the Auth user.
  */
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
+import { STAFF_TAG } from "./auth";
 import { createServiceClient } from "./supabase/server";
 import { validationError } from "./memberships";
 import type { ActionResult } from "./payments";
@@ -82,6 +84,7 @@ export async function createStaff(input: unknown, ownerId: string): Promise<Acti
     await admin.auth.admin.deleteUser(id); // no staff row yet, so nothing references this user
     return SAVE_FAILED;
   }
+  revalidateTag(STAFF_TAG);
   await audit(ownerId, "staff.created", id, `Front-desk login created for ${name} (${email}).`);
   return { ok: true, data: { id } };
 }
@@ -101,6 +104,7 @@ export async function setStaffActive(staffId: string, active: boolean, ownerId: 
     await admin.from("staff_users").update({ is_active: !active }).eq("id", staffId);
     return SAVE_FAILED;
   }
+  revalidateTag(STAFF_TAG); // a removed login stops working on its very next request
   await audit(ownerId, active ? "staff.restored" : "staff.removed", staffId, `${data[0].name} (${data[0].role}) access ${active ? "restored" : "removed"}.`);
   return { ok: true, data: undefined };
 }

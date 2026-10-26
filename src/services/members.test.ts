@@ -64,6 +64,11 @@ describe("createMemberSchema — phone format", () => {
 
 describe("listMembers — search", () => {
   const orFilter = () => calls.members?.find(([m]) => m === "or")?.[1][0];
+  // Plans and memberships are read in the same parallel round as members.
+  beforeEach(() => {
+    results.plans = [{ data: [], error: null }];
+    results.memberships = [{ data: [], error: null }];
+  });
 
   it("finds a member by their member ID", async () => {
     results.members = [{ data: [], error: null }];

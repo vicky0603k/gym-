@@ -3,6 +3,8 @@
  * shown on the public landing page), Red List / renewal rules and the default
  * weekly target. Owner only; every change is audited (SECURITY.md).
  */
+import { cache } from "react";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { z } from "zod";
 import { createServiceClient } from "./supabase/server";
 import { validationError } from "./memberships";
@@ -59,6 +61,7 @@ export async function updateWeeklyGoalDefault(input: unknown, staffId: string): 
     record_id: saved.id,
     summary: `Default weekly target changed from ${row?.weekly_goal_default ?? DEFAULT_WEEKLY_TARGET} to ${value} visits.`,
   });
+  revalidateTag(SETTINGS_TAG);
   return { ok: true, data: { value } };
 }
 
@@ -91,8 +94,11 @@ export async function getMemberIdPrefix(): Promise<string> {
   return memberIdPrefix(await getSettings());
 }
 
-/** The single settings row, with defaults when it hasn't been created yet. Throws on a database error. */
-export async function getSettings(): Promise<GymSettings> {
+// Every page reads settings (titles, gym name, member IDs) but they change a few times a
+// month: serve them from Next's data cache and drop it whenever they are saved.
+const SETTINGS_TAG = "settings";
+
+async function readSettings(): Promise<GymSettings> {
   const { data, error } = await createServiceClient()
     .from("settings")
     .select("gym_name, tagline, address, maps_url, phone, opening_hours, upi_id, upi_name, no_show_threshold_days, renewal_windows, weekly_goal_default, freeze_max_days_per_year, gstin, member_id_prefix")
@@ -101,6 +107,9 @@ export async function getSettings(): Promise<GymSettings> {
   if (error) throw new Error("SETTINGS_LOAD_FAILED");
   return { ...DEFAULTS, ...(data ?? {}) };
 }
+
+/** The single settings row, with defaults when it hasn't been created yet. Throws on a database error. */
+export const getSettings = cache(unstable_cache(readSettings, [SETTINGS_TAG], { tags: [SETTINGS_TAG], revalidate: 300 }));
 
 const optionalText = (max: number, message: string) =>
   z.string().trim().max(max, message).optional().transform((v) => v || null);
@@ -183,6 +192,7 @@ async function saveSettings(patch: Partial<Omit<Settings, "id" | "created_at" | 
     record_id: saved.id,
     summary,
   });
+  revalidateTag(SETTINGS_TAG);
   return { ok: true, data: undefined };
 }
 

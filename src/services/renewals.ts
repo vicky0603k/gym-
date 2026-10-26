@@ -9,6 +9,7 @@
  */
 import { headers } from "next/headers";
 import { createServiceClient } from "./supabase/server";
+import { getSettings } from "./settings";
 import { formatDisplayDate } from "@/utils/dates";
 import type { RenewalDueDbRow } from "./supabase/database.types";
 
@@ -54,13 +55,9 @@ export interface RenewalGroup extends RenewalStage {
 
 /** Pipeline grouped by the owner's stages, most urgent first, with expected collection. Throws on a database error. */
 export async function listRenewalsDue(): Promise<RenewalGroup[]> {
-  const supabase = createServiceClient();
-  const [due, settings] = await Promise.all([
-    supabase.rpc("renewals_due", {}),
-    supabase.from("settings").select("renewal_windows").limit(1).maybeSingle(),
-  ]);
-  if (due.error || !due.data || settings.error) throw new Error("RENEWALS_LOAD_FAILED");
-  return groupRenewals(due.data, settings.data?.renewal_windows ?? DEFAULT_RENEWAL_WINDOWS);
+  const [due, settings] = await Promise.all([createServiceClient().rpc("renewals_due", {}), getSettings()]);
+  if (due.error || !due.data) throw new Error("RENEWALS_LOAD_FAILED");
+  return groupRenewals(due.data, settings.renewal_windows ?? DEFAULT_RENEWAL_WINDOWS);
 }
 
 export function groupRenewals(rows: RenewalDueDbRow[], windows: number[] = DEFAULT_RENEWAL_WINDOWS): RenewalGroup[] {
@@ -96,7 +93,7 @@ export function paymentSetupFrom(upiId: string | null | undefined, payeeName: st
 
 /** The gym's UPI ID from Settings (gym profile), falling back to the GYM_UPI_ID env var used before Phase 11. */
 export async function getPaymentSetup(): Promise<PaymentSetup> {
-  const { data } = await createServiceClient().from("settings").select("gym_name, upi_id, upi_name").limit(1).maybeSingle();
+  const data = await getSettings().catch(() => null);
   const gymName = data?.gym_name || process.env.NEXT_PUBLIC_GYM_NAME || "Your gym";
   return paymentSetupFrom(data?.upi_id || process.env.GYM_UPI_ID, data?.upi_name?.trim() || process.env.GYM_UPI_NAME?.trim() || gymName);
 }
@@ -109,7 +106,7 @@ export function upiPayLink(setup: PaymentSetup & { upiId: string }, amount: numb
 
 /** Gym name for receipts and payee name. */
 export async function getGymName(): Promise<string> {
-  const { data } = await createServiceClient().from("settings").select("gym_name").limit(1).maybeSingle();
+  const data = await getSettings().catch(() => null);
   return data?.gym_name || process.env.NEXT_PUBLIC_GYM_NAME || "Your gym";
 }
 

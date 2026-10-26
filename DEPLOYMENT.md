@@ -33,6 +33,9 @@ How the app is deployed for the pilot, and how updates are shipped. Stack: Verce
    (01:30 UTC = 07:00 IST — adjust so the Red List is fresh before the gym's morning shift. Note Vercel cron schedules are in UTC.)
 4. Deploy. Note the production URL (`https://<project>.vercel.app` or a custom domain — see §5).
 
+### Speed: put the app next to the database
+Every page talks to Supabase several times, so the server must run in the **same region as the Supabase project** (Supabase → Project Settings → General → Region). In Vercel → Project → Settings → Functions → Region pick the matching one (Mumbai = `bom1`, Singapore = `sin1`). Vercel's default (US East) adds roughly 250 ms to every database call from an Indian region.
+
 ## 4. Post-deploy smoke tests (every production deploy)
 
 Run on the production URL, on a real phone:

@@ -32,9 +32,10 @@ export const dynamic = "force-dynamic";
  * today, then the numbers. On desktop the "do now" column sits beside the figures.
  */
 export default async function OwnerDashboardPage() {
-  const [k, due, staff] = await Promise.all([getDashboardKPIs(), getFollowUpsDue(5), getCurrentStaff()]);
+  // One round of parallel queries; data-quality checks are only shown to the owner.
+  const [k, due, staff, allIssues] = await Promise.all([getDashboardKPIs(), getFollowUpsDue(5), getCurrentStaff(), getDataQualityIssues()]);
   const isOwner = staff?.role === "Owner";
-  const issues = isOwner ? await getDataQualityIssues() : [];
+  const issues = isOwner ? allIssues : [];
   const n = (v: number) => new Intl.NumberFormat("en-IN").format(v);
   const pendingPayments = k.summary.paymentsPending;
 
